@@ -126,6 +126,10 @@ This makes a 16:9 portrait, invents the voice once with LTX-2 and saves `voice.w
 
 By eye, the upscale is close to native 1080p, so it's the recommended way to make 1080p.
 
+## Other languages
+
+Narrators can speak other languages through the same `tts.engine` options as influencers (Chatterbox Multilingual, optional fine-tunes such as Slovak, or Piper + voice conversion). See the root README's [Languages](../README.md#languages) section. Write the plan's segments in that language and resize the word budget to its speaking rate.
+
 ## Voice tuning
 
 In Chatterbox, **lower `cfg_weight` follows the reference clip's accent** (0.3 very closely, but slowly) and higher values drift towards the model's default American accent (1.0 sounded American). `temperature` 0.5 keeps the accent consistent between takes. If a narrator's accent still varies with the seed, choose a take you like and save a 10-second cut of it as the new reference (`tts.voice`). That's how Vale's `voice_v2_british.wav` was made.

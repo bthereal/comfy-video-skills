@@ -1,5 +1,11 @@
 """Narration (audio side, shared by both skills): Chatterbox TTS in a persona's cloned voice, Whisper word checks,
 and slicing one continuous narration into per-segment pieces on LTX's frame grid.
+
+Other languages (profile tts.engine):
+  chatterbox_mtl  Chatterbox Multilingual run in-process, optionally with fine-tuned T3 weights (e.g. Slovak),
+                  cloning the persona's voice clip; segments are generated and Whisper-checked one at a time.
+  piper_vc        fallback: a native Piper voice says the script, then Chatterbox voice conversion re-voices it.
+Both build the take segment by segment, so cut points are exact and Whisper is only a sanity check.
 """
 import difflib, json, math, re, shutil
 from pathlib import Path
@@ -17,8 +23,12 @@ DEFAULT_TTS = {"voice": "voice.wav", "cfg_weight": 0.4, "exaggeration": 0.5, "te
 # cfg_weight: LOWER follows the reference clip's accent (0.3 very close but slow), HIGHER drifts to the model's
 # default American (1.0). temperature 0.5 keeps the accent from wandering between takes.
 
-WHISPER_DIR = Path.home() / ".cache" / "faster-whisper" / "small.en"
-_WHISPER = None
+WHISPER_ROOT = Path.home() / ".cache" / "faster-whisper"
+WHISPER_MODELS = {"en": ("small.en", "Systran/faster-whisper-small.en")}   # English: small and fast
+WHISPER_OTHER = ("large-v3-turbo", "mobiuslabsgmbh/faster-whisper-large-v3-turbo")  # other languages need the big one
+PIPER_DIR = Path.home() / ".cache" / "piper"     # <voice>/<voice>.onnx(.json), from rhasspy/piper-voices
+SEG_GAP, SENT_GAP = 0.35, 0.2                     # piper_vc: pause between segments / between sentences in one
+_WHISPER, _PIPER = {}, {}
 _NUMWORDS = set("zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen "
                 "seventeen eighteen nineteen twenty thirty forty fifty sixty seventy eighty ninety hundred thousand "
                 "million first second third fourth fifth sixth seventh eighth ninth tenth".split())
@@ -79,24 +89,25 @@ def estimate_seconds(texts):
 
 # ---------------------------------------------------------------- Whisper
 def _norm(s):
-    return re.sub(r"[^a-z0-9 ]", "", s.lower().replace("-", " ")).split()
+    return re.sub(r"[^\w ]|_", "", s.lower().replace("-", " ")).split()  # \w keeps accented letters (č, ä, ô...)
 
 
-def whisper():
-    global _WHISPER
-    if _WHISPER is None:
-        if not WHISPER_DIR.exists():
-            raise SystemExit(f"Whisper model not found at {WHISPER_DIR} - download Systran/faster-whisper-small.en there")
+def whisper(lang="en"):
+    name, repo = WHISPER_MODELS.get(lang, WHISPER_OTHER)
+    if name not in _WHISPER:
+        d = WHISPER_ROOT / name
+        if not d.exists():
+            raise SystemExit(f"Whisper model not found at {d} - download {repo} there")
         from faster_whisper import WhisperModel
         try:
-            _WHISPER = WhisperModel(str(WHISPER_DIR), device="cuda", compute_type="float16")
+            _WHISPER[name] = WhisperModel(str(d), device="cuda", compute_type="float16")
         except Exception:
-            _WHISPER = WhisperModel(str(WHISPER_DIR), device="cpu", compute_type="int8")
-    return _WHISPER
+            _WHISPER[name] = WhisperModel(str(d), device="cpu", compute_type="int8")
+    return _WHISPER[name]
 
 
-def words_with_times(path):
-    segs, _ = whisper().transcribe(str(path), language="en", word_timestamps=True, beam_size=5)
+def words_with_times(path, lang="en"):
+    segs, _ = whisper(lang).transcribe(str(path), language=lang, word_timestamps=True, beam_size=5)
     return [w for s in segs for w in s.words]
 
 
@@ -198,7 +209,140 @@ def tts_take(text, voice_upload_name, seed, prefix, cfg_weight, exaggeration, te
     return comfy.run(wf, f"narration {Path(prefix).name}")
 
 
-def narrate(texts, tts, seed, out_dir, out_prefix, voice_upload_name):
+def _speech_span(a, sr):
+    """(start, end) seconds of the audible part of a clip (energy above 5% of its loud level)."""
+    import numpy as np
+    hop = int(sr * 0.01)
+    rms = np.sqrt(np.convolve(a ** 2, np.ones(hop) / hop, mode="same"))[::hop]
+    on = np.nonzero(rms > 0.05 * np.percentile(rms, 95))[0]
+    return (on[0] * 0.01, (on[-1] + 1) * 0.01) if len(on) else (0.0, len(a) / sr)
+
+
+def piper_speech(texts, voice, out_wav, length_scale=1.0):
+    """Native-language speech for a list of segment texts, one wav. Returns (path, bounds) where bounds are each
+    segment's (first_sound, last_sound) in seconds - known exactly, because each segment is synthesized separately."""
+    import numpy as np
+    from piper import PiperVoice, SynthesisConfig
+    onnx = PIPER_DIR / voice / f"{voice}.onnx"
+    if not onnx.exists():
+        raise SystemExit(f"Piper voice not found at {onnx} - download {voice}.onnx and .onnx.json from "
+                         f"rhasspy/piper-voices on Hugging Face there")
+    if voice not in _PIPER:
+        _PIPER[voice] = PiperVoice.load(str(onnx))
+    v, cfg = _PIPER[voice], SynthesisConfig(length_scale=length_scale)
+    sr = v.config.sample_rate
+    parts, bounds, t = [np.zeros(int(LEAD * sr), "float32")], [], LEAD
+    for k, text in enumerate(texts):
+        seg = []
+        for ch in v.synthesize(text, syn_config=cfg):  # one chunk per sentence
+            seg += [ch.audio_float_array, np.zeros(int(SENT_GAP * sr), "float32")]
+        seg = np.concatenate(seg[:-1])
+        s, e = _speech_span(seg, sr)
+        bounds.append((t + s, t + e))
+        parts.append(seg); t += len(seg) / sr
+        if k + 1 < len(texts):
+            parts.append(np.zeros(int(SEG_GAP * sr), "float32")); t += SEG_GAP
+    save_wav(out_wav, np.concatenate(parts), sr)
+    return Path(out_wav), bounds
+
+
+def piper_vc_take(texts, tts, voice_upload_name, seed, prefix):
+    """piper_vc engine: Piper says the texts, Chatterbox VC re-voices them as the persona (timing is preserved).
+    Returns (take_path, bounds)."""
+    src, bounds = piper_speech(texts, tts["piper_voice"], comfy.TMP / f"{comfy.slug(prefix)}_piper.wav",
+                               tts.get("length_scale", 1.0))
+    up = comfy.upload(src, src.name)
+    wf = comfy.work_copy("chatterbox_vc.json", prefix)
+    comfy.set_slots(wf, {"1.audio": up, "2.audio": voice_upload_name, "3.seed": seed,
+                         "4.filename_prefix": prefix, "4.format": "flac"})
+    take = comfy.run(wf, f"narration {Path(prefix).name} (voice conversion)")
+    (a_t, sr_t), (a_s, sr_s) = load_audio(take), load_audio(src)
+    ratio = (len(a_t) / sr_t) / (len(a_s) / sr_s)
+    return take, [(s * ratio, e * ratio) for s, e in bounds]
+
+
+MTL_DIR = comfy.COMFY_DIR / "models" / "chatterbox" / "chatterbox_multilingual"  # ResembleAI/chatterbox mtl files
+_MTL = {}
+
+
+def mtl_model(t3_weights=None):
+    """Chatterbox Multilingual, run in this process (the ComfyUI node can't load fine-tuned T3 weights).
+    t3_weights: optional fine-tune (path relative to models/chatterbox), e.g. the Slovak
+    chatterbox_sk/t3_sk_v2.2.safetensors from pekiskol/chatterbox-tts-slovak."""
+    key = t3_weights or "base"
+    if key not in _MTL:
+        import sys, torch
+        _MTL.clear()
+        sys.path.insert(0, str(comfy.COMFY_DIR / "custom_nodes" / "comfyui_fill-chatterbox" / "local_chatterbox"))
+        from chatterbox import mtl_tts
+        if not (MTL_DIR / "t3_mtl23ls_v2.safetensors").exists():
+            raise SystemExit(f"Chatterbox Multilingual not found in {MTL_DIR} - download ve.pt, t3_mtl23ls_v2.safetensors,"
+                             f" s3gen.pt, grapheme_mtl_merged_expanded_v1.json, conds.pt and Cangjie5_TC.json from "
+                             f"ResembleAI/chatterbox there")
+        try:  # free ComfyUI's VRAM first (LTX may still be loaded)
+            comfy.http("POST", "/free", {"unload_models": True, "free_memory": True})
+        except Exception:
+            pass
+        dev = "cuda" if torch.cuda.is_available() else "cpu"
+        m = mtl_tts.ChatterboxMultilingualTTS.from_local(str(MTL_DIR), dev)
+        if t3_weights:
+            from safetensors.torch import load_file
+            state = load_file(str(MTL_DIR.parent / t3_weights), device="cpu")
+            n = m.t3.text_emb.weight.shape[0]  # fine-tunes may differ in text vocab size: trim or pad (their recipe)
+            for k in ("text_emb.weight", "text_head.weight"):
+                w = state[k]
+                state[k] = w[:n] if len(w) >= n else torch.cat([w, w.mean(0, keepdim=True).repeat(n - len(w), 1)])
+            m.t3.load_state_dict(state, strict=True)
+            m.t3.to(dev).eval()
+        _MTL[key] = (m, mtl_tts)
+    return _MTL[key]
+
+
+def free_mtl():
+    if _MTL:
+        import torch
+        _MTL.clear()
+        torch.cuda.empty_cache()
+
+
+def mtl_take(texts, tts, voice_path, seed, out_file):
+    """chatterbox_mtl engine: each segment is generated separately (fine-tunes lose coherence on long inputs, and
+    the cut points are then exact), checked with Whisper in the profile's language, then joined with SEG_GAP pauses.
+    Returns (take_path, bounds)."""
+    import numpy as np, torch
+    m, mod = mtl_model(tts.get("t3_weights"))
+    lang = tts["language"]
+    mod.SUPPORTED_LANGUAGES.setdefault(lang, lang)  # e.g. 'sk': the tokenizer has the token, the list doesn't
+    sr = m.sr
+    parts, bounds, t = [np.zeros(int(LEAD * sr), "float32")], [], LEAD
+    for k, text in enumerate(texts):
+        for attempt in range(4):
+            torch.manual_seed(seed + k + 1000 * attempt)
+            a = m.generate(text, language_id=lang, audio_prompt_path=str(voice_path),
+                           exaggeration=tts.get("exaggeration", 0.5), cfg_weight=tts.get("cfg_weight", 0.5),
+                           temperature=tts.get("temperature", 0.8)).squeeze(0).cpu().numpy().astype("float32")
+            chk = save_wav(comfy.TMP / "mtl_check.wav", a, sr)
+            ws = words_with_times(chk, lang)
+            problem = ("ending missing" if not ends_complete(ws, text) else
+                       f"inserted words {extra_words(ws, text)}" if extra_words(ws, text) else None)
+            if not problem:
+                break
+            print(f"  segment {k + 1}: {problem} (heard '{' '.join(w.word.strip() for w in ws)}') - re-taking")
+        else:
+            print(f"  segment {k + 1}: warning - kept the last take; listen to it (Whisper is weak in some languages)")
+        s, e = _speech_span(a, sr)
+        a = a[max(0, int((s - 0.05) * sr)):int((e + 0.1) * sr)]
+        s, e = _speech_span(a, sr)
+        bounds.append((t + s, t + e))
+        parts.append(a); t += len(a) / sr
+        if k + 1 < len(texts):
+            parts.append(np.zeros(int(SEG_GAP * sr), "float32")); t += SEG_GAP
+    import soundfile as sf
+    sf.write(str(out_file), np.concatenate(parts), sr, format="FLAC")
+    return Path(out_file), bounds
+
+
+def narrate(texts, tts, seed, out_dir, out_prefix, voice_upload_name, voice_path=None):
     """Speak all segment texts as one continuous narration and slice it per segment.
     texts: segment strings. tts: {voice, cfg_weight, exaggeration, temperature}. out_dir: local folder for takes
     (ComfyUI output/<out_prefix>/narration). Returns (slices, sr, secs, narration_array)."""
@@ -211,7 +355,34 @@ def narrate(texts, tts, seed, out_dir, out_prefix, voice_upload_name):
         cur.append(i)
     takes.append(cur)
 
+    def record_local(idxs, name, base_seed):
+        # piper_vc / chatterbox_mtl build the take segment by segment, so the cut points are exact and Whisper (weak
+        # in some languages) isn't needed to find them; here it only warns if the ending sounds wrong.
+        text = " ".join(texts[i] for i in idxs)
+        spec = {"text": text, **tts, "seed": base_seed}
+        take = reuse(out_dir, f"{name}_0*.flac", spec)
+        if take:
+            print(f"  narration {name}: reusing {take.name}")
+            bounds = json.loads(Path(str(take) + ".bounds.json").read_text(encoding="utf-8"))
+        else:
+            seg_texts = [texts[i] for i in idxs]
+            if tts["engine"] == "piper_vc":
+                take, bounds = piper_vc_take(seg_texts, tts, voice_upload_name, base_seed,
+                                             f"{out_prefix}/narration/{name}")
+            else:
+                print(f"  running narration {name} (Chatterbox {tts['language']}, {len(seg_texts)} segment(s))...")
+                take, bounds = mtl_take(seg_texts, tts, voice_path, base_seed, out_dir / f"{name}_00001.flac")
+            Path(str(take) + ".bounds.json").write_text(json.dumps(bounds), encoding="utf-8")
+            Path(str(take) + ".spec.json").write_text(json.dumps(spec), encoding="utf-8")
+        ws = words_with_times(take, tts.get("language", "en"))
+        if not ends_complete(ws, text):
+            print(f"  {name}: warning - Whisper heard the ending as '...{' '.join(w.word.strip() for w in ws[-3:])}'"
+                  f" (listen to it; Whisper is weak in some languages)")
+        return take, bounds
+
     def record(idxs, name, base_seed, tries=3):
+        if tts.get("engine") in ("piper_vc", "chatterbox_mtl"):
+            return record_local(idxs, name, base_seed)
         text = " ".join(texts[i] for i in idxs)
         for attempt in range(tries):
             spec = {"text": text, **tts, "seed": base_seed + 1000 * attempt}
@@ -252,6 +423,7 @@ def narrate(texts, tts, seed, out_dir, out_prefix, voice_upload_name):
                 raise SystemExit(f"segment {i + 1} keeps dropping words even on its own; simplify: {texts[i][:80]}...")
             a_, sr = load_audio(take)
             slices += slice_narration(a_, sr, bounds, final_index=last_take and k == len(idxs) - 1)
+    free_mtl()  # give the VRAM back before the video clips
     secs = [len(x) / sr for x in slices]
     full = np.concatenate(slices)
     save_wav(out_dir / "narration.wav", full, sr)
@@ -260,6 +432,11 @@ def narrate(texts, tts, seed, out_dir, out_prefix, voice_upload_name):
 
 
 def tts_settings(profile):
-    tts = {**DEFAULT_TTS, **profile.get("tts", {})}
+    """Chatterbox personas: DEFAULT_TTS + profile overrides. piper_vc personas ({"engine": "piper_vc", "language",
+    "piper_voice", "voice" (VC target clip), optional "length_scale"}) use only their own keys."""
+    t = profile.get("tts", {})
+    if t.get("engine") in ("piper_vc", "chatterbox_mtl"):
+        return {"voice": "voice.wav", "language": "en", **t}
+    tts = {**DEFAULT_TTS, **t}
     tts.pop("engine", None)
     return tts

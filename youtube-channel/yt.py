@@ -18,6 +18,9 @@ SKILL = Path(__file__).resolve().parent
 sys.path.insert(0, str(SKILL.parent))
 from engine import comfy, narration as N, video as V  # noqa: E402
 
+for _s in (sys.stdout, sys.stderr):  # scripts may be in any language; Windows consoles default to cp1252
+    _s.reconfigure(encoding="utf-8", errors="replace")
+
 NARR = SKILL / "narrators"
 W, H = 1280, 704  # 16:9 at the same pixel count as the 704x1280 reels (fits 16 GB VRAM); multiples of 64
 REQUIRED = ("title", "slug", "narrator", "style", "segments")
@@ -124,7 +127,8 @@ def cmd_make(a):
     out_dir = comfy.COMFY_OUT / "youtube" / slug
     tts = N.tts_settings(prof)
     voice = comfy.upload(NARR / prof["id"] / tts["voice"], f"yt_{prof['id']}__{tts['voice']}")
-    slices, sr, secs, narration = N.narrate(texts, tts, seed, out_dir / "narration", out_prefix, voice)
+    slices, sr, secs, narration = N.narrate(texts, tts, seed, out_dir / "narration", out_prefix, voice,
+                                            NARR / prof["id"] / tts["voice"])
 
     vw, vh = plan.get("width", W), plan.get("height", H)
     if vw % 64 or vh % 64:

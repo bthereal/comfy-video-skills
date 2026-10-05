@@ -39,6 +39,9 @@ Always run `--dry-run` and show the user the split, the timings and the script.
 ## 4. Check and deliver
 Output: `$COMFYUI_DIR/output/youtube/<slug>/<slug>_final.mp4` (and `_1080p.mp4`). Check: audio and video lengths are equal; a frame per chapter (the narrator matches the portrait; footage has nobody speaking); narration warnings in the log. Send the video. Remind the user to label it AI-generated and to fact-check.
 
+## Other languages
+If the narrator's profile has `tts.language` other than English, write every segment in that language and size the script by its speaking rate (Slovak ≈ 2.75 words/s). Engines and downloads: root README → Languages.
+
 ## Voice tuning (profile.json → `tts`)
 Vale uses `voice_v2_british.wav`, `cfg_weight` 0.4 and `temperature` 0.5. **Higher cfg_weight pulls towards the model's default American accent**; lower follows the reference clip. Temperature 0.5 stops the accent drifting between takes. If the accent still varies by seed, bootstrap: the user picks a take, and a 10 s cut of it becomes the new reference.
 

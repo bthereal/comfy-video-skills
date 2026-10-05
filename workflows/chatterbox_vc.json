@@ -1,0 +1,100 @@
+{
+  "id": "6b1f0c52-5d0e-4a8e-9f3e-2f6c1c9e7a10",
+  "revision": 0,
+  "last_node_id": 5,
+  "last_link_id": 3,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadAudio",
+      "pos": [-480, 140],
+      "size": [290, 140],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "title": "Speech (e.g. Piper, native language)",
+      "inputs": [],
+      "outputs": [{"name": "AUDIO", "type": "AUDIO", "links": [1]}],
+      "properties": {"Node name for S&R": "LoadAudio"},
+      "widgets_values": ["speech.wav", null],
+      "widgets_values_named": {"audio": "speech.wav", "upload": null}
+    },
+    {
+      "id": 2,
+      "type": "LoadAudio",
+      "pos": [-480, 340],
+      "size": [290, 140],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "title": "Target voice (persona reference)",
+      "inputs": [],
+      "outputs": [{"name": "AUDIO", "type": "AUDIO", "links": [2]}],
+      "properties": {"Node name for S&R": "LoadAudio"},
+      "widgets_values": ["voice.wav", null],
+      "widgets_values_named": {"audio": "voice.wav", "upload": null}
+    },
+    {
+      "id": 3,
+      "type": "FL_ChatterboxVC",
+      "pos": [-140, 220],
+      "size": [330, 180],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {"name": "input_audio", "type": "AUDIO", "link": 1},
+        {"name": "target_voice", "type": "AUDIO", "link": 2}
+      ],
+      "outputs": [
+        {"name": "audio", "type": "AUDIO", "links": [3]},
+        {"name": "message", "type": "STRING", "links": null}
+      ],
+      "properties": {"Node name for S&R": "FL_ChatterboxVC"},
+      "widgets_values": [7, "fixed", false, false],
+      "widgets_values_named": {"seed": 7, "control_after_generate": "fixed", "use_cpu": false, "keep_model_loaded": false},
+      "color": "#16727c",
+      "bgcolor": "#4F0074"
+    },
+    {
+      "id": 4,
+      "type": "SaveAudioAdvanced",
+      "pos": [240, 220],
+      "size": [380, 150],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [{"name": "audio", "type": "AUDIO", "link": 3}],
+      "outputs": [{"name": "audio", "type": "AUDIO", "links": null}],
+      "properties": {},
+      "widgets_values": ["audio/chatterbox_vc", "flac"],
+      "widgets_values_named": {"filename_prefix": "audio/chatterbox_vc", "format": "flac"}
+    },
+    {
+      "id": 5,
+      "type": "MarkdownNote",
+      "pos": [-990, 140],
+      "size": [470, 340],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "title": "Chatterbox voice conversion",
+      "properties": {},
+      "widgets_values": ["Re-voices existing speech into a persona's voice, keeping its words and timing.\n\nUsed for languages Chatterbox can't speak (e.g. Slovak): a native TTS voice (Piper) says the script, then this converts it to the persona's voice.\n\n- **Speech**: the audio to convert\n- **Target voice**: a 6-10 s clean clip of the persona\n- Closer pitch between the two gives clearer words (lower or raise the target clip to match)."],
+      "widgets_values_named": {"text": "Re-voices existing speech into a persona's voice, keeping its words and timing.\n\nUsed for languages Chatterbox can't speak (e.g. Slovak): a native TTS voice (Piper) says the script, then this converts it to the persona's voice.\n\n- **Speech**: the audio to convert\n- **Target voice**: a 6-10 s clean clip of the persona\n- Closer pitch between the two gives clearer words (lower or raise the target clip to match)."},
+      "color": "#222",
+      "bgcolor": "#000"
+    }
+  ],
+  "links": [
+    [1, 1, 0, 3, 0, "AUDIO"],
+    [2, 2, 0, 3, 1, "AUDIO"],
+    [3, 3, 0, 4, 0, "AUDIO"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

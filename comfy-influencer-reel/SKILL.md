@@ -28,7 +28,7 @@ Parse the request. *"Maya, 15 seconds, at the beach at sunset, about hydration"*
 | saved setting ("in her gym look") | `look` |
 | topic or exact words | write `segments` |
 
-**Write the script yourself**, in the influencer's `personality` (profile.json). **Words ≈ (seconds − 1) × 3**: 10 s is ~27, 15 s ~42, 30 s ~87. Use segments of ≤26 words, each ending at a sentence end. Hook first, concrete points, a short close. Spell numbers as spoken. No stage directions, hashtags or emojis. If the user gave exact words, use them verbatim. Show the user the script before rendering.
+**Write the script yourself**, in the influencer's `personality` (profile.json) and **in their language** (`profile.language` / `tts.language`; e.g. Slovak for `sk`, using natural native phrasing). **Words ≈ (seconds − 1) × 3** for English (Slovak ≈ × 2.75): 10 s is ~27, 15 s ~42, 30 s ~87. Use segments of ≤26 words, each ending at a sentence end. Hook first, concrete points, a short close. Spell numbers as spoken. No stage directions, hashtags or emojis. If the user gave exact words, use them verbatim. Show the user the script before rendering.
 
 ## 2. Check and render
 ```bash
@@ -48,6 +48,9 @@ Output: `$COMFYUI_DIR/output/reels/<slug>/<slug>_final.mp4`. Check with PyAV: a 
 
 ## Voice tuning (profile.json → `tts`)
 Defaults: `cfg_weight` 0.4, `temperature` 0.5, `exaggeration` 0.5. In Chatterbox, **higher cfg_weight drifts towards the model's default American accent** and lower follows the reference clip (0.3 = closest but slow). If the accent varies by seed, generate a few takes, let the user pick one, and save a 10 s sentence-ending cut as the new `tts.voice`.
+
+## Other languages
+A profile's `tts.engine` picks the voice: none = English Chatterbox; `chatterbox_mtl` = Chatterbox Multilingual (optionally a fine-tune via `tts.t3_weights`, e.g. Slovak); `piper_vc` = native Piper voice re-voiced by Chatterbox voice conversion (fallback). Setup and downloads: root README → Languages. Whisper checks run in `tts.language` with `large-v3-turbo`; it's weaker outside English, so if it warns, listen rather than trust it. To make a new non-English influencer: `new` as usual, then edit `tts` and add the language to `personality`.
 
 ## Built-in safeguards (in `../engine/`)
 - Takes are rejected and re-recorded if Whisper finds a missing ending or inserted/repeated words. A take that keeps failing is recorded segment by segment.

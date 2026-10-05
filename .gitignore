@@ -12,6 +12,10 @@ output/
 # Per-influencer run logs (point at local output files)
 reels.jsonl
 
+# Local-only personas and plans (kept on this machine, not published)
+comfy-influencer-reel/influencers/radka/
+comfy-influencer-reel/plans/radka-*/
+
 # Editor / OS
 .vscode/
 .idea/

@@ -16,6 +16,30 @@ Both skills run the **same narration-first pipeline** on a shared engine and sha
 
 What a video is *about* (topic, script, setting, style, sound) lives entirely in its **plan file**, and who's speaking (face, voice, camera, lighting) lives in the **persona profile**. The code has no subject matter in it.
 
+## Languages
+
+English is the default. A persona can speak another language by choosing a voice engine in its `profile.json` → `tts`; nothing else in the pipeline changes (LTX lip-syncs any language).
+
+| `tts.engine` | Use for | How it works |
+|---|---|---|
+| *(none)* | English | Chatterbox TTS in the ComfyUI node; whole script as one continuous take. |
+| `chatterbox_mtl` | Chatterbox Multilingual's 23 languages, or a language with a fine-tune (e.g. Slovak) | Chatterbox Multilingual run in Python (optionally with fine-tuned `t3_weights`), cloning the persona's voice clip. Each segment is generated and checked separately. |
+| `piper_vc` | Fallback for languages with no Chatterbox model | A native [Piper](https://github.com/OHF-Voice/piper1-gpl) voice says the script, then Chatterbox voice conversion re-voices it as the persona. Clear words, but flatter delivery. |
+
+Example (a Slovak persona, using the community Slovak fine-tune):
+
+```json
+"tts": {
+  "engine": "chatterbox_mtl",
+  "language": "sk",
+  "t3_weights": "chatterbox_sk/t3_sk_v2.2.safetensors",
+  "voice": "voice.wav",
+  "cfg_weight": 0.5, "exaggeration": 0.5, "temperature": 0.8
+}
+```
+
+Write the persona's scripts in that language. Non-English word checks use Whisper `large-v3-turbo` (English uses `small.en`). Speaking rates differ: Slovak runs at about 2.75 words per second against English's ~3.
+
 ## Requirements
 
 **Hardware.** Developed and benchmarked on Windows 11 with an RTX 5070 Ti (16 GB VRAM) and 64 GB RAM. Clips peak at about 15.5-15.8 GB VRAM. Less VRAM needs shorter clips and lower resolution.
@@ -43,6 +67,16 @@ What a video is *about* (topic, script, setting, style, sound) lives entirely in
 | Talking clips (LTX-2.3 image+audio) | `checkpoints/ltx-2.3-22b-dev-fp8.safetensors`, `loras/ltx_2.3_22b_distilled_1.1_lora_dynamic_fro09_avg_rank_111_bf16.safetensors`, `latent_upscale_models/ltx-2.3-spatial-upscaler-x2-1.1.safetensors`, `text_encoders/gemma_3_12B_it_fp4_mixed.safetensors`, `loras/gemma-3-12b-it-abliterated_lora_rank64_bf16.safetensors` |
 | Narration (Chatterbox TTS) | `models/chatterbox/chatterbox/{ve.safetensors, t3_cfg.safetensors, s3gen.safetensors, tokenizer.json, conds.pt}` from [ResembleAI/chatterbox](https://huggingface.co/ResembleAI/chatterbox) |
 | Word checks (Whisper) | [Systran/faster-whisper-small.en](https://huggingface.co/Systran/faster-whisper-small.en) in `~/.cache/faster-whisper/small.en/` |
+
+Only for non-English personas (see [Languages](#languages)):
+
+| Used for | Files |
+|---|---|
+| Other languages (`chatterbox_mtl`) | `models/chatterbox/chatterbox_multilingual/{ve.pt, t3_mtl23ls_v2.safetensors, s3gen.pt, grapheme_mtl_merged_expanded_v1.json, conds.pt, Cangjie5_TC.json}` from [ResembleAI/chatterbox](https://huggingface.co/ResembleAI/chatterbox) |
+| Slovak fine-tune (optional) | `models/chatterbox/chatterbox_sk/t3_sk_v2.2.safetensors` from [pekiskol/chatterbox-tts-slovak](https://huggingface.co/pekiskol/chatterbox-tts-slovak) (MIT; a community model) |
+| Voice conversion (`piper_vc`) | `models/chatterbox/chatterbox_vc/{s3gen.pt, conds.pt}` (the Chatterbox node downloads these on first use) |
+| Native speech (`piper_vc`) | `pip install piper-tts`, plus a voice's `.onnx` and `.onnx.json` from [rhasspy/piper-voices](https://huggingface.co/rhasspy/piper-voices) in `~/.cache/piper/<voice>/` |
+| Word checks, non-English | [mobiuslabsgmbh/faster-whisper-large-v3-turbo](https://huggingface.co/mobiuslabsgmbh/faster-whisper-large-v3-turbo) in `~/.cache/faster-whisper/large-v3-turbo/` |
 
 ## Setup
 
@@ -80,10 +114,11 @@ workflows/             shared ComfyUI workflow templates
   flux2_dev.json          new outfit/scene for an influencer (keeps the face)
   ltx2_i2v_distilled.json invents a new persona's voice (once)
   chatterbox_tts.json     narration in a cloned voice
+  chatterbox_vc.json      re-voices speech as a persona (piper_vc engine)
   ltx2_3_ia2v.json        talking clips: image + audio -> lip-synced video
 engine/                shared Python
   comfy.py                ComfyUI connection: config, job runner, uploads, persona creation helpers
-  narration.py            Chatterbox takes, Whisper checks, slicing
+  narration.py            voice engines (Chatterbox, Chatterbox Multilingual, Piper + VC), Whisper checks, slicing
   video.py                prompts, clip rendering (resume, chaining, VRAM splits), assembly, upscale
   watchdog.py             unattended/overnight renders for either skill (restarts ComfyUI, resumes)
   after_then.py           start a render when another process exits

@@ -20,6 +20,9 @@ SKILL = Path(__file__).resolve().parent
 sys.path.insert(0, str(SKILL.parent))
 from engine import comfy, narration as N, video as V  # noqa: E402
 
+for _s in (sys.stdout, sys.stderr):  # scripts may be in any language; Windows consoles default to cp1252
+    _s.reconfigure(encoding="utf-8", errors="replace")
+
 INFL = SKILL / "influencers"
 PLANS = SKILL / "plans"
 W, H = 704, 1280  # 9:16; proven on 16 GB VRAM; must be multiples of 64
@@ -124,7 +127,8 @@ def cmd_make(a):
     seed = plan.get("seed", prof["seed"])
     tts = N.tts_settings(prof)
     voice = comfy.upload(INFL / prof["id"] / tts["voice"], f"{prof['id']}__{tts['voice']}")
-    slices, sr, secs, narration = N.narrate(texts, tts, seed, out_dir / "narration", out_prefix, voice)
+    slices, sr, secs, narration = N.narrate(texts, tts, seed, out_dir / "narration", out_prefix, voice,
+                                            INFL / prof["id"] / tts["voice"])
     action = plan.get("action")  # e.g. "walking slowly, holding the phone at arm's length"
     prompt = V.person_visual(prof, look["outfit"], look["scene"], action)
     first_img = upload_look(prof, look_name)
@@ -204,12 +208,17 @@ def cmd_save_ui(a):
     comfy.require_server()
     prof = load(a.id)
     tts = N.tts_settings(prof)
-    wf = comfy.work_copy("chatterbox_tts.json", f"{prof['id']}_tts_template")
-    comfy.set_slots(wf, {"6.audio": comfy.upload(INFL / prof["id"] / tts["voice"], f"{prof['id']}__{tts['voice']}"),
-                         "4.text": "Replace with the narration.", "4.cfg_weight": tts["cfg_weight"],
-                         "4.exaggeration": tts["exaggeration"], "4.temperature": tts["temperature"],
-                         "8.filename_prefix": f"reels/ui/{prof['id']}_narration"})
-    comfy.save_to_ui(wf, f"Influencers/{prof['name']}/1 Narration (Chatterbox)")
+    voice = comfy.upload(INFL / prof["id"] / tts["voice"], f"{prof['id']}__{tts['voice']}")
+    if tts.get("engine") == "piper_vc":  # Piper runs outside ComfyUI; the sidebar gets the voice-conversion step
+        wf = comfy.work_copy("chatterbox_vc.json", f"{prof['id']}_vc_template")
+        comfy.set_slots(wf, {"2.audio": voice, "4.filename_prefix": f"reels/ui/{prof['id']}_narration"})
+        comfy.save_to_ui(wf, f"Influencers/{prof['name']}/1 Narration (voice conversion of Piper speech)")
+    else:
+        wf = comfy.work_copy("chatterbox_tts.json", f"{prof['id']}_tts_template")
+        comfy.set_slots(wf, {"6.audio": voice, "4.text": "Replace with the narration.", "4.cfg_weight": tts["cfg_weight"],
+                             "4.exaggeration": tts["exaggeration"], "4.temperature": tts["temperature"],
+                             "8.filename_prefix": f"reels/ui/{prof['id']}_narration"})
+        comfy.save_to_ui(wf, f"Influencers/{prof['name']}/1 Narration (Chatterbox)")
     look = prof["looks"]["default"]
     wf = comfy.work_copy("ltx2_3_ia2v.json", f"{prof['id']}_ia2v_template")
     comfy.set_slots(wf, {"269.image": upload_look(prof, "default"), "340.value_5": False,

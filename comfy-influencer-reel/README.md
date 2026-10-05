@@ -115,6 +115,8 @@ New looks: `python reel.py look --id maya --look beach --outfit "..." --scene ".
 
 **Voice tuning** lives in `profile.json` → `tts` (defaults: `cfg_weight` 0.4, `temperature` 0.5). Lower `cfg_weight` follows the reference clip's accent more closely; higher drifts towards the model's default American accent. If the accent still varies between takes, pick a take you like and save a 10 s cut of it as the new reference (`tts.voice`).
 
+**Other languages.** An influencer can speak another language: create them with `new` as usual (the portrait is all that matters; the invented English voice clip still works as the cloning reference), then set `tts.engine`, `tts.language` and so on in `profile.json` as described in the root README's [Languages](../README.md#languages) section. Add a line to their `personality` saying which language to write in. Size scripts by that language's speaking rate (Slovak ≈ 2.75 words/s, so a 15 s reel is ~38 words).
+
 `python reel.py save-ui --id maya` publishes ready-to-run Chatterbox and image+audio workflows (voice and portrait preloaded) to the ComfyUI **Workflows** sidebar.
 
 ## Timing (RTX 5070 Ti 16 GB)
