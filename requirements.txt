@@ -7,3 +7,4 @@ faster-whisper>=1.2  # spoken-word checks and narration slicing
 librosa              # pitch shifting / resampling utilities
 soundfile            # writing narration slices
 # ComfyUI side (not pip): custom node pack ComfyUI_Fill-ChatterBox - https://github.com/filliptm/ComfyUI_Fill-ChatterBox
+#   pinned to the reviewed commit f7d7a16187430abcaf91a3039b9c83aa9960816a (see README "Software")

@@ -16,7 +16,15 @@ Two Claude Code skills (and the Python tools behind them) that generate talking-
 **Software**
 - ComfyUI (tested with v0.38), running on `127.0.0.1:8188`
 - Python 3.13 (the same interpreter as ComfyUI), plus `pip install -r requirements.txt`
-- ComfyUI custom node pack **[ComfyUI_Fill-ChatterBox](https://github.com/filliptm/ComfyUI_Fill-ChatterBox)** for narration (youtube-channel only)
+- ComfyUI custom node pack **[ComfyUI_Fill-ChatterBox](https://github.com/filliptm/ComfyUI_Fill-ChatterBox)** for narration (youtube-channel only), **pinned to the tested commit `f7d7a16`** (2026-08-23). Custom nodes run arbitrary Python inside ComfyUI, so install the version that was reviewed rather than whatever is newest:
+
+  ```bash
+  cd "%COMFYUI_DIR%\custom_nodes"
+  git clone https://github.com/filliptm/ComfyUI_Fill-ChatterBox comfyui_fill-chatterbox
+  git -C comfyui_fill-chatterbox checkout f7d7a16187430abcaf91a3039b9c83aa9960816a
+  pip install -r comfyui_fill-chatterbox/requirements.txt
+  ```
+  If you update it later, re-read its changes first, especially anything that downloads files or runs subprocesses. The reviewed version only downloads from the official `ResembleAI/chatterbox` Hugging Face repos and runs no shell commands.
 
 **Models** (put these in your ComfyUI `models/` folders):
 
@@ -72,7 +80,15 @@ youtube-channel/
 
 Generated output goes to `<ComfyUI>/output/reels/` and `<ComfyUI>/output/youtube/` and isn't part of this repo.
 
-## Notes
+## Responsible use
 
-- All influencers and narrators (Maya, James Whitford, Dr. Simon Vale) are fictional and AI-generated. Label published videos as AI-generated, per platform rules.
-- Scripts about health, finance or history should be fact-checked before publishing. The YouTube skill presents conspiracy content as theory versus documented record.
+These tools create realistic people who talk, using cloned voices. Please use them responsibly:
+
+- **Don't impersonate real people.** Don't use a real person's face, voice or name for an influencer or narrator, and don't clone anyone's voice from a recording without their explicit consent. The included personas (Maya, James Whitford, Dr. Simon Vale) are fictional and fully AI-generated, with faces and voices invented by the models.
+- **Label AI content.** Disclose that videos are AI-generated wherever you publish them. YouTube, TikTok and Instagram all require disclosure of realistic synthetic media.
+- **Don't deceive.** Don't present generated videos as genuine footage, testimonials, endorsements or news, and don't use them for scams, fraud, harassment, political deception or non-consensual content.
+- **Check the facts.** Scripts about health, finance, law or history should be fact-checked before publishing. The YouTube skill frames conspiracy topics as theory versus documented record; keep it that way.
+- **Respect model licences.** The models listed above each have their own licence and usage policy (some restrict commercial use). Check them before publishing commercially. No model weights are included in this repo.
+- **Keep ComfyUI local.** It has no authentication. `start-comfyui.bat` binds it to `127.0.0.1` only; don't add `--listen` or expose port 8188 to a network.
+
+You're responsible for what you generate and publish with these tools.
