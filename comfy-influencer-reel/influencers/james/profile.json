@@ -19,5 +19,14 @@
       "ambience": "Light outdoor breeze, distant birdsong, footsteps on the towpath and a soft city hum, no music.",
       "image": "looks/canal.png"
     }
+  },
+  "camera": "Vertical selfie-style handheld phone video, medium close-up",
+  "lighting": "Natural light, realistic skin texture, social media reel look.",
+  "default_action": "with measured, confident hand gestures and an occasional knowing smile, finishing with a reassuring nod.",
+  "tts": {
+    "voice": "voice.wav",
+    "cfg_weight": 0.4,
+    "exaggeration": 0.5,
+    "temperature": 0.5
   }
 }

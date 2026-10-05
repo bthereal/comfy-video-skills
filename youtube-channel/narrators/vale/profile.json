@@ -15,5 +15,8 @@
     "cfg_weight": 0.4,
     "exaggeration": 0.5,
     "temperature": 0.5
-  }
+  },
+  "camera": "Medium shot, 16:9, static camera on a tripod, framed from the waist up",
+  "lighting": "Professional studio lighting, shallow depth of field, realistic skin texture.",
+  "default_action": "with measured, expressive hand gestures and occasional nods for emphasis."
 }
