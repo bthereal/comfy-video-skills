@@ -8,6 +8,7 @@
   "narrator_share": 0.4,
   "style": "cinematic documentary still, Apollo era 1969 aesthetic, 35mm film grain, high contrast, realistic",
   "ambience": "Low, atmospheric ambient hum, no music.",
+  "upscale_to": [1920, 1080],
   "segments": [
     {"text": "In July nineteen sixty nine, around six hundred million people watched Neil Armstrong step onto the Moon. Yet a stubborn minority insist it never happened at all.",
      "shot": "The blue Earth rising over the grey cratered lunar horizon against a pitch black sky."},

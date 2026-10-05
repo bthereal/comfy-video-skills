@@ -29,13 +29,13 @@ def load(nid):
     if not p.exists():
         known = ", ".join(d.name for d in NARR.iterdir() if (d / "profile.json").exists()) if NARR.exists() else ""
         raise SystemExit(f"No narrator '{nid}'. Known: {known or 'none'}")
-    return json.loads(p.read_text(encoding="utf-8"))
+    return json.loads(p.read_text(encoding="utf-8-sig"))
 
 
 def cmd_list(a):
     for d in sorted(NARR.iterdir()) if NARR.exists() else []:
         if (d / "profile.json").exists():
-            p = json.loads((d / "profile.json").read_text(encoding="utf-8"))
+            p = json.loads((d / "profile.json").read_text(encoding="utf-8-sig"))
             print(f"{p['id']:8} {p['name']:18} {p['identity'][:90]}...")
 
 
@@ -98,7 +98,7 @@ def validate(plan):
 
 # ---------------------------------------------------------------- make
 def cmd_make(a):
-    plan = json.loads(Path(a.plan).resolve().read_text(encoding="utf-8"))
+    plan = json.loads(Path(a.plan).resolve().read_text(encoding="utf-8-sig"))
     validate(plan)
     prof = load(plan["narrator"])
     segs = plan["segments"]

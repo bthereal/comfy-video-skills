@@ -111,3 +111,7 @@ These tools create realistic people who talk, using cloned voices. Please use th
 - **Keep ComfyUI local.** It has no authentication. `start-comfyui.bat` binds it to `127.0.0.1` only; don't add `--listen` or expose port 8188 to a network.
 
 You're responsible for what you generate and publish with these tools.
+
+## Licence
+
+The code is released under the [MIT License](LICENSE). The models it uses are not included and keep their own licences (see above).

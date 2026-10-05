@@ -43,7 +43,7 @@ def main():
     ap.add_argument("--attempts", type=int, default=12)
     a = ap.parse_args()
     plan_path = Path(a.plan).resolve()
-    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan = json.loads(plan_path.read_text(encoding="utf-8-sig"))
     slug = plan["slug"]
     if "influencer" in plan:
         tool, kind = comfy.ROOT / "comfy-influencer-reel" / "reel.py", "reels"

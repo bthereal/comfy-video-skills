@@ -34,7 +34,7 @@ def load(pid):
     if not p.exists():
         known = ", ".join(x.name for x in INFL.iterdir() if (x / "profile.json").exists())
         raise SystemExit(f"No influencer '{pid}'. Known: {known}")
-    return json.loads(p.read_text(encoding="utf-8"))
+    return json.loads(p.read_text(encoding="utf-8-sig"))
 
 
 def store(prof):
@@ -104,7 +104,7 @@ def segments_of(plan):
 
 
 def cmd_make(a):
-    plan = json.loads(Path(a.plan).resolve().read_text(encoding="utf-8"))
+    plan = json.loads(Path(a.plan).resolve().read_text(encoding="utf-8-sig"))
     prof = load(plan["influencer"])
     texts = segments_of(plan)
     est = N.estimate_seconds(texts)
@@ -158,7 +158,7 @@ def cmd_quick(a):
 def cmd_list(a):
     for d in sorted(INFL.iterdir()):
         if (d / "profile.json").exists():
-            p = json.loads((d / "profile.json").read_text(encoding="utf-8"))
+            p = json.loads((d / "profile.json").read_text(encoding="utf-8-sig"))
             print(f"{p['id']:10} {p['name']:16} looks: {', '.join(p['looks'])}")
             print(f"{'':10} {p['identity'][:110]}...")
 
