@@ -1,6 +1,6 @@
 # comfy-video-skills
 
-Two Claude Code skills (and the Python tools behind them) that generate talking-head videos **entirely locally** in [ComfyUI](https://github.com/comfyanonymous/ComfyUI). No paid APIs are used. This is an experimental personal project to get generative AI video content working on a relatively low spec (for local AI generation) machine. Sharing the results in case it helps anyone. See below for the specs used, would recommend at least 16GB vram.
+Two Claude Code skills (and the Python tools behind them) that generate talking-head videos **entirely locally** in [ComfyUI](https://github.com/comfyanonymous/ComfyUI). No paid APIs are used. This is an experimental personal project to get generative AI video content working on a relatively low spec (for local AI generation) machine. Sharing the results in case it helps anyone. See below for the specs used, would recommend at least 16GB vram. This is not something I'll support long-term, was just a bit of fun.
 
 | Skill | What it makes |
 |---|---|
