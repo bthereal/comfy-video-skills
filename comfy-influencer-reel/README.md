@@ -50,6 +50,14 @@ The narrator speaks about **3 words per second**, plus a 1-second silent hold at
 - **Or** describe a new one with `"scene"` (and optionally `"outfit"`, `"ambience"`). The first run creates it with Flux.2 (about 3 min; the face stays the same) and saves it to the profile for reuse. Name it with `"look"`, otherwise it's named after the scene.
 - `"action"` is what they do while talking (gestures, walking, holding a product). It defaults to the profile's `default_action`.
 
+### Scenes with business (props, other people)
+For a reel where the influencer *does* something (takes food out of the oven, reacts to someone off camera), lessons from testing:
+- Split the script so each segment matches one beat of action, and give each its own `action`. Short segments hold an action better than long ones; LTX drifts back to its default (facing camera, smiling) over ~6 s.
+- Repeat the state of the scene in every later segment's action ("the ham on the carving board in front of her, the oven behind her open and empty") so props don't reappear or move.
+- Say the expression explicitly in every segment (e.g. "deeply concerned, not smiling"), including the last, or a smile creeps back at the end.
+- Use `camera` for a static shot when both hands are needed, and a new look whose scene contains the props.
+- Talking *during* an action looks more natural than a silent `intro`.
+
 ### 5. The plan file
 
 ```json
@@ -74,13 +82,16 @@ The narrator speaks about **3 words per second**, plus a 1-second silent hold at
 | `title` | yes | Human-readable name (also the ComfyUI sidebar folder). |
 | `slug` | yes | Folder name for outputs; lowercase-with-dashes. |
 | `influencer` | yes | Influencer `id`. |
-| `segments` or `script` | yes | The exact words, as segments (`[{"text": ...}]`) or one string. |
+| `segments` or `script` | yes | The exact words, as segments (`[{"text": ..., "action"?, "gaze"?}]`) or one string. A segment's `action` overrides the plan's for that clip; `gaze` replaces "looks directly at the camera" (e.g. `"turns her head to the right of the frame and shouts at someone off camera"`). |
 | `seconds` | no | Target length; used only for the word estimate. |
 | `seed` | no | Change it for a different take (voice delivery and motion). Defaults to the influencer's seed. |
 | `look` | no | Saved look name (default `default`), or the name for a new look made from `scene`/`outfit`. |
 | `scene`, `outfit`, `ambience` | no | Describe a new setting; it's created on the fly and saved. |
 | `action` | no | Movement while talking, e.g. `"walking slowly along the towpath, holding the phone at arm's length"`. |
 | `topic` | no | A note for you; not used for rendering. |
+| `camera` | no | Overrides the profile's camera for this reel, e.g. `"Static camera on a tripod on the kitchen island, medium shot"` when both hands are busy. |
+| `intro` | no | A silent opening shot before the first word: `{"seconds": 3.2, "action": "..."}` (rounded to LTX's 0.32 s grid). Mouth closed. Often it looks more natural to start talking during the action instead. |
+| `sfx` | no | Sound effects mixed into the soundtrack (lip-sync still uses the clean voice): `[{"file": "alarm.wav", "segment": 3, "offset": -0.5, "gain": 0.5, "loop": true}]`. `file` is relative to the plan's folder; it starts at that segment's first word plus `offset`. |
 | `width`, `height` | no | Default 704x1280; must be multiples of 64. |
 | `upscale_to` | no | e.g. `[1080, 1920]` for a 1080p copy (fast Lanczos + sharpen). |
 
@@ -115,7 +126,7 @@ New looks: `python reel.py look --id maya --look beach --outfit "..." --scene ".
 
 **Voice tuning** lives in `profile.json` → `tts` (defaults: `cfg_weight` 0.4, `temperature` 0.5). Lower `cfg_weight` follows the reference clip's accent more closely; higher drifts towards the model's default American accent. If the accent still varies between takes, pick a take you like and save a 10 s cut of it as the new reference (`tts.voice`).
 
-**Other languages.** An influencer can speak another language: create them with `new` as usual (the portrait is all that matters; the invented English voice clip still works as the cloning reference), then set `tts.engine`, `tts.language` and so on in `profile.json` as described in the root README's [Languages](../README.md#languages) section. Add a line to their `personality` saying which language to write in. Size scripts by that language's speaking rate (Slovak ≈ 2.75 words/s, so a 15 s reel is ~38 words).
+**Other languages.** An influencer can speak another language: create them with `new` as usual (the portrait is all that matters; the invented English voice clip still works as the cloning reference), then set `tts.engine`, `tts.language` and so on in `profile.json` as described in the root README's [Languages](../README.md#languages) section. Add a line to their `personality` saying which language to write in. Size scripts by that language's speaking rate (Slovak ≈ 2.5 words/s, so a 15 s reel is ~33 words).
 
 `python reel.py save-ui --id maya` publishes ready-to-run Chatterbox and image+audio workflows (voice and portrait preloaded) to the ComfyUI **Workflows** sidebar.
 

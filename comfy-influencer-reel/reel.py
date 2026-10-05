@@ -130,10 +130,24 @@ def cmd_make(a):
     slices, sr, secs, narration = N.narrate(texts, tts, seed, out_dir / "narration", out_prefix, voice,
                                             INFL / prof["id"] / tts["voice"])
     action = plan.get("action")  # e.g. "walking slowly, holding the phone at arm's length"
-    prompt = V.person_visual(prof, look["outfit"], look["scene"], action)
+    seg_actions = [s.get("action") if isinstance(s, dict) else None for s in plan.get("segments") or []]
+    seg_actions += [None] * (len(texts) - len(seg_actions))  # a per-segment "action" overrides the plan's
+    shot = {**prof, "camera": plan["camera"]} if plan.get("camera") else prof  # e.g. a static shot, hands free
     first_img = upload_look(prof, look_name)
-    items = [{"tag": f"{slug}_{i:02d}", "image": first_img, "prompt": prompt, "seed": seed + i, "label": f"segment {i}"}
+    seg_gaze = [s.get("gaze") if isinstance(s, dict) else None for s in plan.get("segments") or []]
+    seg_gaze += [None] * (len(texts) - len(seg_gaze))
+    items = [{"tag": f"{slug}_{i:02d}", "image": first_img, "seed": seed + i, "label": f"segment {i}",
+              "prompt": V.person_visual(shot, look["outfit"], look["scene"], seg_actions[i - 1] or action,
+                                        gaze=seg_gaze[i - 1] or "looks directly at the camera")}
              for i in range(1, len(texts) + 1)]
+    narration = V.mix_sfx(narration, sr, secs, plan.get("sfx", []), Path(a.plan).resolve().parent)
+    if plan.get("intro"):  # silent opening shot before the first word: {"seconds", "action"}
+        import numpy as np
+        sil = np.zeros(int(round(max(1, round(plan["intro"]["seconds"] / N.GRID)) * N.GRID * sr)), "float32")
+        slices, secs, narration = [sil] + slices, [len(sil) / sr] + secs, np.concatenate([sil, narration])
+        items.insert(0, {"tag": f"{slug}_00", "image": first_img, "seed": seed, "label": "intro (silent)",
+                         "prompt": V.person_visual(shot, look["outfit"], look["scene"], plan["intro"]["action"],
+                                                   speaking=False)})
     w, h = plan.get("width", W), plan.get("height", H)
     clips, clip_secs = V.render_clips(items, slices, sr, out_dir, out_prefix, w, h,
                                       f"Influencers/{prof['name']}/{plan['title']}", chain_all=True)

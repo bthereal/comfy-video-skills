@@ -38,7 +38,7 @@ Example (a Slovak persona, using the community Slovak fine-tune):
 }
 ```
 
-Write the persona's scripts in that language. Non-English word checks use Whisper `large-v3-turbo` (English uses `small.en`). Speaking rates differ: Slovak runs at about 2.75 words per second against English's ~3.
+Write the persona's scripts in that language. Non-English word checks use Whisper `large-v3-turbo` (English uses `small.en`). Speaking rates differ: Slovak (Chatterbox fine-tune) measured 2.2-2.8 words per second (exclamations and short segments are slowest; budget ~2.5) against English's ~3.
 
 ## Requirements
 

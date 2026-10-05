@@ -27,8 +27,9 @@ Parse the request. *"Maya, 15 seconds, at the beach at sunset, about hydration"*
 | movement | `action` ("walking slowly along the shore, holding the phone at arm's length") |
 | saved setting ("in her gym look") | `look` |
 | topic or exact words | write `segments` |
+| beats of action, reactions, off-camera lines | per-segment `action` and `gaze`; plan `camera` (static shot), `intro` (silent opening), `sfx` (sound effects); see README "Scenes with business" |
 
-**Write the script yourself**, in the influencer's `personality` (profile.json) and **in their language** (`profile.language` / `tts.language`; e.g. Slovak for `sk`, using natural native phrasing). **Words ≈ (seconds − 1) × 3** for English (Slovak ≈ × 2.75): 10 s is ~27, 15 s ~42, 30 s ~87. Use segments of ≤26 words, each ending at a sentence end. Hook first, concrete points, a short close. Spell numbers as spoken. No stage directions, hashtags or emojis. If the user gave exact words, use them verbatim. Show the user the script before rendering.
+**Write the script yourself**, in the influencer's `personality` (profile.json) and **in their language** (`profile.language` / `tts.language`; e.g. Slovak for `sk`, using natural native phrasing). **Words ≈ (seconds − 1) × 3** for English (Slovak ≈ × 2.5): 10 s is ~27, 15 s ~42, 30 s ~87. Use segments of ≤26 words, each ending at a sentence end. Hook first, concrete points, a short close. Spell numbers as spoken. No stage directions, hashtags or emojis. If the user gave exact words, use them verbatim. Show the user the script before rendering.
 
 ## 2. Check and render
 ```bash

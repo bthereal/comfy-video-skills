@@ -20,15 +20,16 @@ def poss(pronoun):
     return {"she": "her", "he": "his"}.get(pronoun, "their")
 
 
-def person_visual(prof, outfit, scene, action):
-    """On-camera shot of a persona talking. camera/lighting/default_action come from the profile."""
+def person_visual(prof, outfit, scene, action, speaking=True, gaze="looks directly at the camera"):
+    """On-camera shot of a persona talking (or, speaking=False, silent). camera/lighting/default_action come from
+    the profile; gaze can redirect the line (e.g. "turns to shout at someone off camera to the right")."""
     p = prof.get("pronoun", "they")
     camera = prof.get("camera", "Medium shot, static camera")
     lighting = prof.get("lighting", "Soft, natural light, realistic skin texture.")
     action = action or prof.get("default_action", "with small natural head movements and light hand gestures.")
-    return (f"{camera}. {prof['identity']} {p.capitalize()} is wearing {outfit}, in {scene}. "
-            f"{p.capitalize()} looks directly at the camera and is speaking, {poss(p)} mouth opens and closes "
-            f"naturally as {p} talks, {action} {lighting}")
+    talk = (f"{p.capitalize()} {gaze} and is speaking, {poss(p)} mouth opens and closes "
+            f"naturally as {p} talks," if speaking else f"{p.capitalize()} is silent, not talking, mouth closed,")
+    return f"{camera}. {prof['identity']} {p.capitalize()} is wearing {outfit}, in {scene}. {talk} {action} {lighting}"
 
 
 def footage_visual(plan, shot):
@@ -95,6 +96,27 @@ def render_clips(items, slices, sr, out_dir, out_prefix, w, h, ui_folder, chain_
             clips.append(out); clip_secs.append(p_secs)
             prev, img, pos = out, None, pos + p_secs
     return clips, clip_secs
+
+
+# ---------------------------------------------------------------- sound effects
+def mix_sfx(narration, sr, slice_secs, sfx, base_dir):
+    """Mix plan sound effects into the narration track. Each: {"file" (relative to the plan's folder), "segment"
+    (1-based; starts with that segment's slice), "offset" (seconds, may be negative), "gain" (default 0.5),
+    "loop" (repeat to the end of the video)}. Returns a new array; the narration is unchanged if sfx is empty."""
+    import numpy as np, librosa
+    out = narration.copy()
+    for fx in sfx:
+        a, fsr = N.load_audio(Path(base_dir) / fx["file"])
+        if fsr != sr:
+            a = librosa.resample(a, orig_sr=fsr, target_sr=sr)
+        start = max(0, int(round((sum(slice_secs[:fx.get("segment", 1) - 1]) + fx.get("offset", 0.0)) * sr)))
+        if fx.get("loop"):
+            a = np.tile(a, math.ceil((len(out) - start) / len(a)) + 1)
+        a = a[:max(0, len(out) - start)] * fx.get("gain", 0.5)
+        out[start:start + len(a)] += a
+        print(f"  sfx {fx['file']} at {start / sr:.2f}s")
+    peak = abs(out).max()
+    return out / peak * 0.98 if peak > 0.98 else out
 
 
 # ---------------------------------------------------------------- assembly
