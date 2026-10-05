@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Generated media (renders live in <ComfyUI>/output, but keep strays out of the repo)
+*.mp4
+*.flac
+output/
+*.log
+
+# Per-influencer run logs (point at local output files)
+reels.jsonl
+
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

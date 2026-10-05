@@ -1,0 +1,9 @@
+# Python packages used by reel.py / yt.py (install into the same Python that runs ComfyUI)
+comfy-cli>=1.22      # workflow slot editing + UI->API conversion
+av>=14               # PyAV: video/audio decode, encode, joining, upscaling
+numpy
+pillow
+faster-whisper>=1.2  # spoken-word checks and narration slicing
+librosa              # pitch shifting / resampling utilities
+soundfile            # writing narration slices
+# ComfyUI side (not pip): custom node pack ComfyUI_Fill-ChatterBox - https://github.com/filliptm/ComfyUI_Fill-ChatterBox
