@@ -138,6 +138,43 @@ def ends_complete(words, text):
     return want[-1] in _NUMWORDS and any(c.isdigit() for c in got[-1])
 
 
+STRETCH_PER_CHAR = 0.23  # a word lasting longer than (letters + 2) * this is a drawn-out "slow-motion" glitch
+MAX_GAP = 1.5            # a pause inside one line longer than this (seconds) is a glitch, not phrasing
+
+
+def drawl(words):
+    """A TTS glitch that a word check misses (all the words are there, just stretched): a drawn-out word or a long
+    pause mid-line. Returns a description or None. (engine/qa.py uses the same thresholds after rendering.)"""
+    ws = [w for w in words if w.word.strip()]
+    for w in ws:
+        letters = len("".join(_norm(w.word)))
+        if w.end - w.start > (letters + 2) * STRETCH_PER_CHAR:
+            return f"drawn-out word '{w.word.strip()}' ({w.end - w.start:.1f}s)"
+    gaps = [(ws[k + 1].start - ws[k].end) for k in range(len(ws) - 1)]
+    if gaps and max(gaps) > MAX_GAP:
+        return f"{max(gaps):.1f}s pause mid-line"
+    return None
+
+
+def script_end(words, text, min_cover=0.75):
+    """Where the script finishes inside a take that ran on (TTS sometimes keeps talking after a short line): the end
+    time of the transcript word matching the script's last word, if the transcript up to there covers most of the
+    script in order. None if the script isn't clearly there."""
+    want = _norm(text)
+    got, owner = [], []
+    for k, w in enumerate(words):
+        for t in _norm(w.word):
+            got.append(t); owner.append(k)
+    if not want or not got:
+        return None
+    blocks = difflib.SequenceMatcher(None, want, got, autojunk=False).get_matching_blocks()
+    covered = sum(b.size for b in blocks)
+    last = [b for b in blocks if b.size and b.a + b.size == len(want)]  # a block ending on the script's last word
+    if covered / len(want) < min_cover or not last:
+        return None
+    return words[owner[last[0].b + last[0].size - 1]].end
+
+
 def segment_bounds(words, seg_texts):
     """For each segment, (first_word_start, last_word_end) in the take: walk the transcript matching each segment's
     final word, anchored on the next segment's opening words (fuzzy; numbers may collapse into digits)."""
@@ -324,9 +361,16 @@ def mtl_take(texts, tts, voice_path, seed, out_file):
             chk = save_wav(comfy.TMP / "mtl_check.wav", a, sr)
             ws = words_with_times(chk, lang)
             problem = ("ending missing" if not ends_complete(ws, text) else
-                       f"inserted words {extra_words(ws, text)}" if extra_words(ws, text) else None)
+                       f"inserted words {extra_words(ws, text)}" if extra_words(ws, text) else drawl(ws))
             if not problem:
                 break
+            end = script_end(ws, text)  # said the line, then ran on: keep the line, cut the rest
+            if end is not None:
+                a = a[:int((end + 0.15) * sr)]
+                kept = [w for w in ws if w.end <= end + 0.01]
+                if ends_complete(kept, text) and not extra_words(kept, text) and not drawl(kept):
+                    print(f"  segment {k + 1}: ran on after the line - cut at {end:.2f}s")
+                    break
             print(f"  segment {k + 1}: {problem} (heard '{' '.join(w.word.strip() for w in ws)}') - re-taking")
         else:
             print(f"  segment {k + 1}: warning - kept the last take; listen to it (Whisper is weak in some languages)")
@@ -428,6 +472,128 @@ def narrate(texts, tts, seed, out_dir, out_prefix, voice_upload_name, voice_path
     full = np.concatenate(slices)
     save_wav(out_dir / "narration.wav", full, sr)
     print(f"  narration: {len(full) / sr:.2f}s in {len(takes)} take(s); segments " + ", ".join(f"{x:.2f}" for x in secs))
+    return slices, sr, secs, full
+
+
+LINE_GAP = 0.3  # dialogue: default pause after each line
+PART_GAP = 0.12  # mixed-language line: pause where the voice switches language (like quoting a word)
+
+
+def split_parts(text):
+    """'Spaniards say {vale} all the time.' -> [(False, 'Spaniards say'), (True, 'vale'), (False, 'all the time.')]:
+    braces mark words in the line's other language."""
+    import re
+    out = []
+    for k, chunk in enumerate(re.split(r"[{}]", text)):
+        chunk = chunk.strip(" ,")
+        if not chunk:
+            continue
+        if out and out[-1][0] == (k % 2 == 1):  # '{Zumo.} {Zumo de naranja}': one phrase, not two tiny takes
+            out[-1] = (out[-1][0], f"{out[-1][1]} {chunk}")
+        else:
+            out.append((k % 2 == 1, chunk))
+    return out
+
+
+def plain(text):
+    """Line text without the language-switch braces (for captions, checks and estimates)."""
+    return text.replace("{", "").replace("}", "")
+
+
+def speak_line(ln, out_dir, out_prefix):
+    """One dialogue line in its speaker's voice. ln: {name, text, tts, voice_upload, voice_path, check, seed}.
+    check=False skips the Whisper word check (e.g. a learner's deliberately accented attempt at another language).
+    Resumable via a .spec.json sidecar. Returns (audio, sr)."""
+    if ln.get("parts"):  # a mixed-language line: each part in the right voice, joined with a short gap
+        import numpy as np, librosa
+        pieces, sr = [], None
+        for k, part in enumerate(ln["parts"]):
+            a, psr, take = speak_line({**part, "name": f"{ln['name']}p{k}"}, out_dir, out_prefix)
+            a, _ = trim_tail(a, psr, take, part["text"], part["tts"].get("language", "en"))
+            s, e = _speech_span(a, psr)
+            a = a[max(0, int((s - 0.03) * psr)):int((e + 0.05) * psr)]
+            sr = sr or psr
+            if psr != sr:
+                a = librosa.resample(a, orig_sr=psr, target_sr=sr)
+            pieces += [a, np.zeros(int(PART_GAP * sr), "float32")]
+        return np.concatenate(pieces[:-1]), sr, None
+    tts, text = ln["tts"], ln["text"]
+    spec = {"text": text, **tts, "seed": ln["seed"]}
+    take = reuse(out_dir, f"{ln['name']}_0*.flac", spec)
+    if take:
+        print(f"  {ln['name']}: reusing {take.name}")
+    elif tts.get("engine") == "chatterbox_mtl":
+        print(f"  running {ln['name']} (Chatterbox {tts['language']})...")
+        n = len(list(out_dir.glob(f"{ln['name']}_0*.flac"))) + 1  # a new file per take (never overwrite an older one)
+        take, _ = mtl_take([text], tts, ln["voice_path"], ln["seed"], out_dir / f"{ln['name']}_{n:05d}.flac")
+        Path(str(take) + ".spec.json").write_text(json.dumps(spec), encoding="utf-8")
+    else:
+        for attempt in range(3):
+            take = tts_take(text, ln["voice_upload"], ln["seed"] + 1000 * attempt, f"{out_prefix}/narration/{ln['name']}",
+                            tts["cfg_weight"], tts["exaggeration"], tts["temperature"])
+            if not ln.get("check", True):
+                break
+            ws = words_with_times(take, tts.get("language", "en"))
+            problem = ("ending missing" if not ends_complete(ws, text) else
+                       f"inserted words {extra_words(ws, text)}" if extra_words(ws, text) else drawl(ws))
+            if not problem:
+                break
+            print(f"  {ln['name']}: {problem} - re-taking")
+        else:
+            print(f"  {ln['name']}: warning - kept the last take; listen to it")
+    if not Path(str(take) + ".spec.json").exists():
+        Path(str(take) + ".spec.json").write_text(json.dumps(spec), encoding="utf-8")
+    return (*load_audio(take), take)
+
+
+TAIL_MAX = 0.6  # sound this long after the script's last word is the TTS babbling on, not the line
+
+
+def trim_tail(a, sr, take, text, lang):
+    """Chatterbox (especially Multilingual on short lines) sometimes keeps making sound after the line: mumbles or
+    babble that Whisper doesn't transcribe, so word checks pass. Cut 0.25 s after the script's last word when more
+    than TAIL_MAX of sound follows it. Returns (audio, seconds removed)."""
+    ws = [w for w in words_with_times(take, lang) if w.word.strip()]
+    if not ws:
+        return a, 0.0
+    last = script_end(ws, text) or ws[-1].end
+    _, e = _speech_span(a, sr)
+    if e - last <= TAIL_MAX:
+        return a, 0.0
+    cut = int((last + 0.25) * sr)
+    return a[:cut], (len(a) - cut) / sr
+
+
+def narrate_lines(lines, out_dir, out_prefix):
+    """Dialogue narration: every line spoken separately in its own speaker's voice and language, trimmed to its
+    speech, followed by its pause (line "pause_after", default LINE_GAP) and padded to LTX's grid; the last line gets
+    END_SILENCE. Returns (slices, sr, secs, narration_array) like narrate()."""
+    import numpy as np, librosa
+    out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
+    spoken = [None if ln.get("silence") else speak_line(ln, out_dir, out_prefix) for ln in lines]
+    sr = next((x[1] for x in spoken if x), 24000)
+    slices = []
+    for k, (ln, sp) in enumerate(zip(lines, spoken)):
+        if sp is None:  # a silent shot (e.g. an establishing wide shot): just time on the grid
+            slices.append(np.zeros(int(round(max(1, round(ln["silence"] / GRID)) * GRID * sr)), "float32"))
+            continue
+        a, asr, take = sp
+        a, cut = trim_tail(a, asr, take, ln["text"], ln["tts"].get("language", "en")) if take else (a, 0.0)
+        if cut:
+            print(f"  {ln['name']}: removed {cut:.1f}s of sound after the last word")
+        if asr != sr:
+            a = librosa.resample(a, orig_sr=asr, target_sr=sr)
+        s, e = _speech_span(a, sr)
+        a = a[max(0, int((s - 0.05) * sr)):int((e + 0.1) * sr)]
+        tail = (ln.get("pause_after") or LINE_GAP) + (END_SILENCE if k == len(lines) - 1 else 0.0)
+        piece = np.concatenate([np.zeros(int(LEAD * sr), "float32"), a, np.zeros(int(tail * sr), "float32")])
+        n = int(round(max(1, math.ceil(len(piece) / sr / GRID - 1e-9)) * GRID * sr))
+        slices.append(np.concatenate([piece, np.zeros(max(0, n - len(piece)), "float32")])[:n])
+    free_mtl()
+    secs = [len(x) / sr for x in slices]
+    full = np.concatenate(slices)
+    save_wav(out_dir / "narration.wav", full, sr)
+    print(f"  narration: {len(full) / sr:.2f}s in {len(lines)} lines")
     return slices, sr, secs, full
 
 

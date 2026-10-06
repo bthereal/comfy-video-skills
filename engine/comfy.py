@@ -124,13 +124,22 @@ def find_submitted(marker):
     return None
 
 
+def to_api(wf_path):
+    """UI-format workflow file -> API-format prompt dict (converted locally)."""
+    from comfy_cli.workflow_to_api import convert_ui_to_api
+    return convert_ui_to_api(json.loads(Path(wf_path).read_text(encoding="utf-8")), object_info())
+
+
 def run(wf_path, label):
     """Convert UI->API locally, submit once (safe against connection resets), poll history for the output file."""
-    from comfy_cli.workflow_to_api import convert_ui_to_api
+    return run_api(to_api(wf_path), label, Path(wf_path).stem)
+
+
+def run_api(api, label, stem="job"):
+    """Submit an API-format prompt once (safe against connection resets) and poll history for the output file."""
     print(f"  running {label} (this can take a few minutes)...", flush=True)
     t = time.time()
-    api = convert_ui_to_api(json.loads(Path(wf_path).read_text(encoding="utf-8")), object_info())
-    marker = f"{Path(wf_path).stem}-{time.time():.3f}"
+    marker = f"{stem}-{time.time():.3f}"
     body = {"prompt": api, "client_id": "comfy-video-skills", "extra_data": {"reel_marker": marker}}
     pid = None
     for i in range(6):
@@ -218,6 +227,31 @@ def make_portrait(prompt, width, height, seed, prefix, label="portrait"):
     set_slots(wf, {"57.text": prompt, "57.width": width, "57.height": height, "57.seed": seed,
                    "9.filename_prefix": prefix})
     return wf, run(wf, label)
+
+
+def flux_edit(image_uploads, prompt, seed, prefix, label="edit"):
+    """Flux.2 Dev edit guided by one or more reference images (the first sets the output size). Extra references are
+    chained as further ReferenceLatent conditioning, e.g. two people's portraits -> one shot of both together.
+    Returns (workflow copy, output png)."""
+    wf = work_copy("flux2_dev.json", f"{prefix}_{label}")
+    set_slots(wf, {"46.image": image_uploads[0], "68.text": prompt, "68.vae_name": "flux2-vae.safetensors",
+                   "68.value": True, "68.noise_seed": seed, "9.filename_prefix": prefix})
+    api = to_api(wf)
+    kind = lambda c: [k for k, n in api.items() if n["class_type"] == c]
+    scale, enc, ref = api[kind("ImageScaleToTotalPixels")[0]], api[kind("VAEEncode")[0]], kind("ReferenceLatent")[0]
+    for j, up in enumerate(image_uploads[1:], 1):
+        ids = [f"ref{j}_{x}" for x in ("load", "scale", "enc", "ref")]
+        api[ids[0]] = {"class_type": "LoadImage", "inputs": {"image": up}}
+        api[ids[1]] = {"class_type": "ImageScaleToTotalPixels", "inputs": {**scale["inputs"], "image": [ids[0], 0]}}
+        api[ids[2]] = {"class_type": "VAEEncode", "inputs": {**enc["inputs"], "pixels": [ids[1], 0]}}
+        api[ids[3]] = {"class_type": "ReferenceLatent", "inputs": {"conditioning": [ref, 0], "latent": [ids[2], 0]}}
+        for k, n in api.items():  # whatever used the previous reference now uses the chained one
+            if k != ids[3]:
+                for name, v in n["inputs"].items():
+                    if isinstance(v, list) and v[:1] == [ref]:
+                        n["inputs"][name] = [ids[3], v[1]]
+        ref = ids[3]
+    return wf, run_api(api, label, Path(wf).stem)
 
 
 def invent_voice(image_upload, prompt, seed, w, h, prefix):

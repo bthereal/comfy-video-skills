@@ -39,6 +39,9 @@ Always run `--dry-run` and show the user the split, the timings and the script.
 ## 4. Check and deliver
 Output: `$COMFYUI_DIR/output/youtube/<slug>/<slug>_final.mp4` (and `_1080p.mp4`). Check: audio and video lengths are equal; a frame per chapter (the narrator matches the portrait; footage has nobody speaking); narration warnings in the log. Send the video. Remind the user to label it AI-generated and to fact-check.
 
+## Dialogue videos and QA
+For two or more people (presenters, a scene with characters): a plan with `cast` + `lines` (README "Dialogue videos"). Make an angled portrait per speaker (`yt.py angle`) and an establishing shot (`yt.py group`); set `"solo": true` and a `solo_gaze` per cast member so off-camera people aren't drawn into frame. After a long render, run `yt.py qa`, review the flagged lines with the user (report_flagged.png), then `qa --fix --from-report` and `make` again: only flagged lines re-render.
+
 ## Other languages
 If the narrator's profile has `tts.language` other than English, write every segment in that language and size the script by its speaking rate (Slovak with Chatterbox ≈ 2.2-2.8 words/s; budget ~2.5). Engines and downloads: root README → Languages.
 

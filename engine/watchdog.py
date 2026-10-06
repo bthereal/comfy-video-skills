@@ -1,5 +1,6 @@
 """Unattended render for either skill: keeps ComfyUI alive and re-runs `make` (which resumes finished takes/clips)
-until the final video exists. Works out the skill from the plan: "influencer" -> reel.py, "narrator" -> yt.py.
+until the final video exists. Works out the skill from the plan: "influencer" -> reel.py, "narrator" or "cast"
+(dialogue) -> yt.py.
 
   python engine/watchdog.py --plan youtube-channel/projects/<slug>/plan.json [--attempts 12]
 
@@ -47,10 +48,10 @@ def main():
     slug = plan["slug"]
     if "influencer" in plan:
         tool, kind = comfy.ROOT / "comfy-influencer-reel" / "reel.py", "reels"
-    elif "narrator" in plan:
+    elif "narrator" in plan or "cast" in plan:
         tool, kind = comfy.ROOT / "youtube-channel" / "yt.py", "youtube"
     else:
-        raise SystemExit("plan has neither 'influencer' (reel) nor 'narrator' (YouTube)")
+        raise SystemExit("plan has neither 'influencer' (reel) nor 'narrator'/'cast' (YouTube)")
     final = comfy.COMFY_OUT / kind / slug / f"{slug}_final.mp4"
     started = time.time()
     with open(comfy.TMP / f"{slug}_watchdog.log", "a", encoding="utf-8") as f:

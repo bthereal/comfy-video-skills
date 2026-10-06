@@ -57,12 +57,14 @@ def render_ia2v(image_upload, audio_upload, secs, prompt, prefix, seed, w, h):
     return wf, comfy.run(wf, f"{Path(prefix).name} ({secs:.2f}s)")
 
 
-def render_clips(items, slices, sr, out_dir, out_prefix, w, h, ui_folder, chain_all=False):
+def render_clips(items, slices, sr, out_dir, out_prefix, w, h, ui_folder, chain_all=False, owners=None):
     """Render one or more clips per narration slice.
-    items[i]: {"tag", "image" (upload name; ignored when chained), "prompt", "seed", "label"}.
+    items[i]: {"tag", "image" (upload name; ignored when chained), "prompt", "seed", "label", "continue"?}.
     A slice longer than the VRAM cap is split into parts on the 0.32 s grid; later parts start from the previous
-    part's last frame. chain_all=True also chains across items (reels: one continuous shot).
-    Resumable: a clip whose .spec.json matches is reused. Returns (clips, clip_secs)."""
+    part's last frame. chain_all=True also chains across items (reels: one continuous shot); an item with
+    "continue": true chains from the previous clip on its own (e.g. the same speaker's next line).
+    owners (optional list) receives the item index of every clip. Resumable: a clip whose .spec.json matches is
+    reused. Returns (clips, clip_secs)."""
     out_dir = Path(out_dir); ndir = out_dir / "narration"
     split_at = SPLIT_AT_BASE * BASE_PIXELS / (w * h)
     clips, clip_secs, prev = [], [], None
@@ -72,7 +74,7 @@ def render_clips(items, slices, sr, out_dir, out_prefix, w, h, ui_folder, chain_
         n_parts = max(1, math.ceil(x / split_at - 1e-9))
         units = round(x / N.GRID)
         part_units = [units // n_parts + (1 if k < units % n_parts else 0) for k in range(n_parts)]
-        img = it["image"] if not (chain_all and prev) else None
+        img = it["image"] if not ((chain_all or it.get("continue")) and prev) else None
         pos = 0.0
         for p, u in enumerate(part_units):
             p_secs = u * N.GRID
@@ -94,6 +96,8 @@ def render_clips(items, slices, sr, out_dir, out_prefix, w, h, ui_folder, chain_
                 out.with_suffix(".spec.json").write_text(json.dumps(spec), encoding="utf-8")
                 comfy.save_to_ui(wf, f"{ui_folder}/{ptag}")
             clips.append(out); clip_secs.append(p_secs)
+            if owners is not None:
+                owners.append(i - 1)
             prev, img, pos = out, None, pos + p_secs
     return clips, clip_secs
 
@@ -120,10 +124,45 @@ def mix_sfx(narration, sr, slice_secs, sfx, base_dir):
 
 
 # ---------------------------------------------------------------- assembly
-def assemble(clips, narration, sr, out, slice_secs):
+_FONTS = {}
+
+
+def draw_caption(img, text):
+    """Burn a caption into an RGB frame (numpy): first line large, any further lines (e.g. a translation) smaller,
+    on a translucent box near the bottom."""
+    import numpy as np
+    from PIL import Image, ImageDraw, ImageFont
+    h, w = img.shape[:2]
+    def font(size, bold):
+        key = (size, bold)
+        if key not in _FONTS:
+            try:
+                _FONTS[key] = ImageFont.truetype("arialbd.ttf" if bold else "arial.ttf", size)
+            except OSError:
+                _FONTS[key] = ImageFont.load_default()
+        return _FONTS[key]
+    lines = text.split("\n")
+    fonts = [font(round(h * 0.052), True)] + [font(round(h * 0.038), False)] * (len(lines) - 1)
+    im = Image.fromarray(img).convert("RGBA"); layer = Image.new("RGBA", im.size); d = ImageDraw.Draw(layer)
+    sizes = [d.textbbox((0, 0), t, font=f) for t, f in zip(lines, fonts)]
+    gap = round(h * 0.012); pad = round(h * 0.022)
+    tw = max(b[2] - b[0] for b in sizes); th = sum(b[3] - b[1] for b in sizes) + gap * (len(lines) - 1)
+    x0, y1 = (w - tw) // 2, h - round(h * 0.07)
+    d.rounded_rectangle((x0 - pad, y1 - th - pad, x0 + tw + pad, y1 + pad), radius=pad, fill=(0, 0, 0, 150))
+    y = y1 - th
+    for t, f, b in zip(lines, fonts, sizes):
+        d.text(((w - (b[2] - b[0])) // 2 - b[0], y - b[1]), t, font=f,
+               fill=(255, 255, 255, 255) if f is fonts[0] else (255, 225, 140, 255))
+        y += b[3] - b[1] + gap
+    return np.asarray(Image.alpha_composite(im, layer).convert("RGB"))
+
+
+def assemble(clips, narration, sr, out, slice_secs, captions=None):
     """Hard-cut the clips' frames (each trimmed to EXACTLY its narration slice - LTX returns slice + 1 frame); the
-    soundtrack is the continuous narration. Streams one clip at a time, so any length fits in RAM."""
+    soundtrack is the continuous narration. Streams one clip at a time, so any length fits in RAM.
+    captions (optional, one per clip, text or None) are burned into that clip's frames."""
     import av, numpy as np
+    captions = captions or [None] * len(clips)
     wants = [int(round(secs * FPS)) for secs in slice_secs]
     n_audio = int(round(sum(wants) / FPS * sr))
     a = narration[int(AV_LEAD * sr):int(AV_LEAD * sr) + n_audio]  # starts in the lead-in silence, so nothing is lost
@@ -147,7 +186,7 @@ def assemble(clips, narration, sr, out, slice_secs):
             for pkt in as_.encode(af): o.mux(pkt)
             ai += 1024
 
-    for p, want in zip(clips, wants):
+    for p, want, cap in zip(clips, wants, captions):
         c = av.open(str(p)); n = 0
         for f in c.decode(video=0):
             if n >= want:
@@ -155,6 +194,8 @@ def assemble(clips, narration, sr, out, slice_secs):
             img = f.to_ndarray(format="rgb24")
             if img.shape[1] != w or img.shape[0] != h:
                 raise SystemExit(f"{Path(p).name} is {img.shape[1]}x{img.shape[0]}, expected {w}x{h}")
+            if cap:
+                img = draw_caption(img, cap)
             audio_until(vi / FPS)
             for pkt in vs.encode(av.VideoFrame.from_ndarray(img, format="rgb24")): o.mux(pkt)
             vi += 1; n += 1
@@ -206,10 +247,10 @@ def upscale_video(src, dst, w, h, sharpen=True):
     print(f"  upscaled {n} frames {sw}x{sh} -> {w}x{h} in {time.time() - t0:.0f}s -> {dst}")
 
 
-def finish(clips, clip_secs, narration, sr, out_dir, slug, plan):
-    """Assemble + optional upscale_to. Returns the final path."""
+def finish(clips, clip_secs, narration, sr, out_dir, slug, plan, captions=None):
+    """Assemble (+ optional per-clip captions) + optional upscale_to. Returns the final path."""
     final = Path(out_dir) / f"{slug}_final.mp4"
-    assemble(clips, narration, sr, final, clip_secs)
+    assemble(clips, narration, sr, final, clip_secs, captions)
     if plan.get("upscale_to"):
         uw, uh = plan["upscale_to"]
         upscale_video(final, Path(out_dir) / f"{slug}_final_{min(uw, uh)}p.mp4", uw, uh)  # 1920x1080 -> _1080p
