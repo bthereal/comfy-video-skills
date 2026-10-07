@@ -476,7 +476,8 @@ def narrate(texts, tts, seed, out_dir, out_prefix, voice_upload_name, voice_path
 
 
 LINE_GAP = 0.3  # dialogue: default pause after each line
-PART_GAP = 0.12  # mixed-language line: pause where the voice switches language (like quoting a word)
+PART_EDGE = (0.08, 0.12)  # mixed-language line: natural lead-in / tail kept on each part (seconds)
+PART_XFADE = 0.025        # ...and the parts are crossfaded together (a gap made the switches sound spliced)
 
 
 def split_parts(text):
@@ -511,12 +512,17 @@ def speak_line(ln, out_dir, out_prefix):
             a, psr, take = speak_line({**part, "name": f"{ln['name']}p{k}"}, out_dir, out_prefix)
             a, _ = trim_tail(a, psr, take, part["text"], part["tts"].get("language", "en"))
             s, e = _speech_span(a, psr)
-            a = a[max(0, int((s - 0.03) * psr)):int((e + 0.05) * psr)]
+            a = a[max(0, int((s - PART_EDGE[0]) * psr)):int((e + PART_EDGE[1]) * psr)]  # keep the natural breath
             sr = sr or psr
             if psr != sr:
                 a = librosa.resample(a, orig_sr=psr, target_sr=sr)
-            pieces += [a, np.zeros(int(PART_GAP * sr), "float32")]
-        return np.concatenate(pieces[:-1]), sr, None
+            if pieces:  # crossfade into the next language instead of a gap: sounds like one sentence, not a splice
+                x = min(int(PART_XFADE * sr), len(a), len(pieces[-1]))
+                ramp = np.linspace(0, 1, x, dtype="float32")
+                pieces[-1][-x:] = pieces[-1][-x:] * (1 - ramp) + a[:x] * ramp
+                a = a[x:]
+            pieces.append(a.copy())
+        return np.concatenate(pieces), sr, None
     tts, text = ln["tts"], ln["text"]
     spec = {"text": text, **tts, "seed": ln["seed"]}
     take = reuse(out_dir, f"{ln['name']}_0*.flac", spec)

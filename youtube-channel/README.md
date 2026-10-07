@@ -121,7 +121,7 @@ A plan with `cast` and `lines` (instead of `narrator` and `segments`) makes a mu
 
 ```json
 {
-  "title": "...", "slug": "...", "seed": 4100, "solo": true,
+  "title": "...", "slug": "...", "seed": 4100, "solo": true, "no_text": true,
   "cast": {
     "monica": {"image": "portrait_side.png", "solo_gaze": "turns slightly towards the right edge of the frame and talks in that direction,",
                "action": "with calm, precise hand gestures."},
@@ -138,7 +138,7 @@ A plan with `cast` and `lines` (instead of `narrator` and `segments`) makes a mu
 
 | Line field | Meaning |
 |---|---|
-| `speaker`, `text` | Who says what. |
+| `speaker`, `text` | Who says what. Put words in the other language in `{braces}` ("Spaniards say {vale} all the time"): a speaker with a native voice for it (profile `voices`) says those words in that voice, the rest in their main voice, crossfaded together. Speakers without one (a learner) just say them in their own accent. `alt_lang` sets the brace language (default `es` for English lines). |
 | `lang` | Language of the line (default `en`). The speaker's profile `voices.<lang>` is used if present (e.g. Spanish via Chatterbox Multilingual); otherwise their main voice says it in their own accent. |
 | `caption` | Burned-in caption; a second line (after `\n`) is shown smaller, e.g. a translation. |
 | `gaze`, `action`, `image` | Override the cast defaults for this line. Lines whose gaze mentions the camera use the front `portrait.png` automatically. |
@@ -146,7 +146,10 @@ A plan with `cast` and `lines` (instead of `narrator` and `segments`) makes a mu
 | `check` | `false` skips the word check (deliberately mispronounced learner attempts). |
 | `shot` + `seconds` + `prompt` | A silent establishing shot from `shots/<name>.png` instead of a spoken line. |
 | `solo` | Prompt says only one person is in frame, and uses the cast member's `solo_gaze` (a direction, not a person). Set it plan-wide: naming the off-camera person makes the video model draw them at the frame edge. |
+| `no_text` | Prompt forbids on-screen text, captions, banners and logos (the video model occasionally invents a TV-style lower third). Set it plan-wide, with `solo`. |
 | `retake_audio`, `retake_video` | Set by QA: a fresh narration take / clip render for just this line. |
+
+Write cast `action`s about **speaking**, not smiling ("speaking clearly, lips and jaw forming every word, a calm, attentive, neutral expression"). Asking for "a bright smile" or "a cheeky grin" makes the video model hold the smile or laugh through the line instead of lip-syncing it, and so does "not smiling": the model reads the word, not the negation, so leave it out entirely.
 
 Helpers: `yt.py angle --id clive --toward left` makes `portrait_side.png` (turned towards the other person, same face and set); `yt.py group --ids monica,clive --name studio-wide --prompt "..."` makes a shot of several characters together (Flux.2 with each portrait as a reference).
 
