@@ -1,17 +1,25 @@
 {
   "title": "Progressive overload in 15 seconds",
   "slug": "maya-progressive-overload",
-  "influencer": "maya",
+  "seed": 424242,
   "topic": "progressive overload for gym beginners",
   "seconds": 15,
-  "seed": 424242,
-  "look": "gym",
-  "action": "with small natural head movements, raised eyebrows and a light hand gesture on each point, finishing with a confident nod and a smile.",
-  "segments": [
+  "format": "9x16",
+  "continuous": true,
+  "narration": "flowing",
+  "cast": {
+    "maya": {
+      "look": "gym",
+      "action": "with small natural head movements, raised eyebrows and a light hand gesture on each point, finishing with a confident nod and a smile."
+    }
+  },
+  "lines": [
     {
+      "speaker": "maya",
       "text": "Real talk: if your workouts feel stuck, try progressive overload. It just means doing a little more each week."
     },
     {
+      "speaker": "maya",
       "text": "One extra rep, or slightly heavier weights. Small steps, every single week. Your body adapts, and you get stronger. Trust me."
     }
   ]

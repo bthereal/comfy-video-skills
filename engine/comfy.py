@@ -229,10 +229,10 @@ def make_portrait(prompt, width, height, seed, prefix, label="portrait"):
     return wf, run(wf, label)
 
 
-def flux_edit(image_uploads, prompt, seed, prefix, label="edit"):
-    """Flux.2 Dev edit guided by one or more reference images (the first sets the output size). Extra references are
-    chained as further ReferenceLatent conditioning, e.g. two people's portraits -> one shot of both together.
-    Returns (workflow copy, output png)."""
+def flux_edit(image_uploads, prompt, seed, prefix, label="edit", size=None):
+    """Flux.2 Dev edit guided by one or more reference images (the first sets the output size, unless size=(w, h),
+    e.g. a 16:9 shot from a 9:16 portrait). Extra references are chained as further ReferenceLatent conditioning,
+    e.g. two people's portraits -> one shot of both together. Returns (workflow copy, output png)."""
     wf = work_copy("flux2_dev.json", f"{prefix}_{label}")
     set_slots(wf, {"46.image": image_uploads[0], "68.text": prompt, "68.vae_name": "flux2-vae.safetensors",
                    "68.value": True, "68.noise_seed": seed, "9.filename_prefix": prefix})
@@ -251,6 +251,9 @@ def flux_edit(image_uploads, prompt, seed, prefix, label="edit"):
                     if isinstance(v, list) and v[:1] == [ref]:
                         n["inputs"][name] = [ids[3], v[1]]
         ref = ids[3]
+    if size:  # the latent and scheduler take their size from the first image; pin them instead
+        for k in kind("EmptyFlux2LatentImage") + kind("Flux2Scheduler"):
+            api[k]["inputs"]["width"], api[k]["inputs"]["height"] = size
     return wf, run_api(api, label, Path(wf).stem)
 
 

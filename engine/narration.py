@@ -386,10 +386,11 @@ def mtl_take(texts, tts, voice_path, seed, out_file):
     return Path(out_file), bounds
 
 
-def narrate(texts, tts, seed, out_dir, out_prefix, voice_upload_name, voice_path=None):
+def narrate(texts, tts, seed, out_dir, out_prefix, voice_upload_name, voice_path=None, name="take", final=True):
     """Speak all segment texts as one continuous narration and slice it per segment.
     texts: segment strings. tts: {voice, cfg_weight, exaggeration, temperature}. out_dir: local folder for takes
-    (ComfyUI output/<out_prefix>/narration). Returns (slices, sr, secs, narration_array)."""
+    (ComfyUI output/<out_prefix>/narration). name prefixes the take files (several runs can share a folder); final=False
+    leaves the 1 s end silence off (the run isn't the end of the video). Returns (slices, sr, secs, narration_array)."""
     import numpy as np
     out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     takes, cur = [], []
@@ -454,20 +455,21 @@ def narrate(texts, tts, seed, out_dir, out_prefix, voice_upload_name, voice_path
     slices, sr = [], None
     for t, idxs in enumerate(takes):
         last_take = t == len(takes) - 1
-        take, bounds = record(idxs, f"take{t + 1:02d}", seed + 10 * t)
+        take, bounds = record(idxs, f"{name}{t + 1:02d}", seed + 10 * t)
         if take:
             a_, sr = load_audio(take)
-            slices += slice_narration(a_, sr, bounds, final_index=last_take)
+            slices += slice_narration(a_, sr, bounds, final_index=last_take and final)
             continue
         # Chatterbox sometimes drops the end of a longer take: record that take's segments one at a time instead
         print(f"  take {t + 1} kept dropping words - recording its {len(idxs)} segments separately")
         for k, i in enumerate(idxs):
-            take, bounds = record([i], f"take{t + 1:02d}_seg{i + 1:03d}", seed + 10 * t + 5 + k, tries=4)
+            take, bounds = record([i], f"{name}{t + 1:02d}_seg{i + 1:03d}", seed + 10 * t + 5 + k, tries=4)
             if not take:
                 raise SystemExit(f"segment {i + 1} keeps dropping words even on its own; simplify: {texts[i][:80]}...")
             a_, sr = load_audio(take)
-            slices += slice_narration(a_, sr, bounds, final_index=last_take and k == len(idxs) - 1)
-    free_mtl()  # give the VRAM back before the video clips
+            slices += slice_narration(a_, sr, bounds, final_index=last_take and final and k == len(idxs) - 1)
+    if final:
+        free_mtl()  # give the VRAM back before the video clips
     secs = [len(x) / sr for x in slices]
     full = np.concatenate(slices)
     save_wav(out_dir / "narration.wav", full, sr)
@@ -570,10 +572,10 @@ def trim_tail(a, sr, take, text, lang):
     return a[:cut], (len(a) - cut) / sr
 
 
-def narrate_lines(lines, out_dir, out_prefix):
+def narrate_lines(lines, out_dir, out_prefix, end_silence=True, free=True):
     """Dialogue narration: every line spoken separately in its own speaker's voice and language, trimmed to its
     speech, followed by its pause (line "pause_after", default LINE_GAP) and padded to LTX's grid; the last line gets
-    END_SILENCE. Returns (slices, sr, secs, narration_array) like narrate()."""
+    END_SILENCE (unless end_silence=False). Returns (slices, sr, secs, narration_array) like narrate()."""
     import numpy as np, librosa
     out_dir = Path(out_dir); out_dir.mkdir(parents=True, exist_ok=True)
     spoken = [None if ln.get("silence") else speak_line(ln, out_dir, out_prefix) for ln in lines]
@@ -591,11 +593,12 @@ def narrate_lines(lines, out_dir, out_prefix):
             a = librosa.resample(a, orig_sr=asr, target_sr=sr)
         s, e = _speech_span(a, sr)
         a = a[max(0, int((s - 0.05) * sr)):int((e + 0.1) * sr)]
-        tail = (ln.get("pause_after") or LINE_GAP) + (END_SILENCE if k == len(lines) - 1 else 0.0)
+        tail = (ln.get("pause_after") or LINE_GAP) + (END_SILENCE if end_silence and k == len(lines) - 1 else 0.0)
         piece = np.concatenate([np.zeros(int(LEAD * sr), "float32"), a, np.zeros(int(tail * sr), "float32")])
         n = int(round(max(1, math.ceil(len(piece) / sr / GRID - 1e-9)) * GRID * sr))
         slices.append(np.concatenate([piece, np.zeros(max(0, n - len(piece)), "float32")])[:n])
-    free_mtl()
+    if free:
+        free_mtl()
     secs = [len(x) / sr for x in slices]
     full = np.concatenate(slices)
     save_wav(out_dir / "narration.wav", full, sr)

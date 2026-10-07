@@ -141,13 +141,21 @@ def draw_caption(img, text):
             except OSError:
                 _FONTS[key] = ImageFont.load_default()
         return _FONTS[key]
-    lines = text.split("\n")
-    fonts = [font(round(h * 0.052), True)] + [font(round(h * 0.038), False)] * (len(lines) - 1)
+    s = min(h, w)  # sized by the short side, so vertical frames get the same text size as landscape ones
+    first, rest = text.split("\n")[0], text.split("\n")[1:]
     im = Image.fromarray(img).convert("RGBA"); layer = Image.new("RGBA", im.size); d = ImageDraw.Draw(layer)
+    lines, fonts = [], []
+    for t, f in [(first, font(round(s * 0.052), True))] + [(r, font(round(s * 0.038), False)) for r in rest]:
+        cur = []  # wrap to 92% of the frame width (a 9:16 frame is narrow)
+        for word in t.split():
+            if cur and d.textlength(" ".join(cur + [word]), font=f) > w * 0.92:
+                lines.append(" ".join(cur)); fonts.append(f); cur = []
+            cur.append(word)
+        lines.append(" ".join(cur)); fonts.append(f)
     sizes = [d.textbbox((0, 0), t, font=f) for t, f in zip(lines, fonts)]
-    gap = round(h * 0.012); pad = round(h * 0.022)
+    gap = round(s * 0.012); pad = round(s * 0.022)
     tw = max(b[2] - b[0] for b in sizes); th = sum(b[3] - b[1] for b in sizes) + gap * (len(lines) - 1)
-    x0, y1 = (w - tw) // 2, h - round(h * 0.07)
+    x0, y1 = (w - tw) // 2, h - round(s * 0.07)
     d.rounded_rectangle((x0 - pad, y1 - th - pad, x0 + tw + pad, y1 + pad), radius=pad, fill=(0, 0, 0, 150))
     y = y1 - th
     for t, f, b in zip(lines, fonts, sizes):

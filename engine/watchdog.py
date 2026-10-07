@@ -1,8 +1,7 @@
-"""Unattended render for either skill: keeps ComfyUI alive and re-runs `make` (which resumes finished takes/clips)
-until the final video exists. Works out the skill from the plan: "influencer" -> reel.py, "narrator" or "cast"
-(dialogue) -> yt.py.
+"""Unattended render: keeps ComfyUI alive and re-runs `video.py make` (which resumes finished takes/clips) until the
+final video exists.
 
-  python engine/watchdog.py --plan youtube-channel/projects/<slug>/plan.json [--attempts 12]
+  python engine/watchdog.py --plan video/plans/<slug>/plan.json [--attempts 12]
 
 Launch it DETACHED (Win32_Process Create via WMI - see the skills' SKILL.md) so it survives the Claude session.
 Logs: %TEMP%/influencer_reel/<slug>_watchdog.log and <slug>_render.log.
@@ -46,13 +45,10 @@ def main():
     plan_path = Path(a.plan).resolve()
     plan = json.loads(plan_path.read_text(encoding="utf-8-sig"))
     slug = plan["slug"]
-    if "influencer" in plan:
-        tool, kind = comfy.ROOT / "comfy-influencer-reel" / "reel.py", "reels"
-    elif "narrator" in plan or "cast" in plan:
-        tool, kind = comfy.ROOT / "youtube-channel" / "yt.py", "youtube"
-    else:
-        raise SystemExit("plan has neither 'influencer' (reel) nor 'narrator'/'cast' (YouTube)")
-    final = comfy.COMFY_OUT / kind / slug / f"{slug}_final.mp4"
+    if "lines" not in plan and "script" not in plan:
+        raise SystemExit("old reel/YouTube plan: convert it first (video.py convert --plan ...)")
+    tool = comfy.ROOT / "video" / "video.py"
+    final = comfy.COMFY_OUT / plan.get("output", "videos") / slug / f"{slug}_final.mp4"
     started = time.time()
     with open(comfy.TMP / f"{slug}_watchdog.log", "a", encoding="utf-8") as f:
         log(f"watchdog start: {plan_path} ({tool.name})", f)

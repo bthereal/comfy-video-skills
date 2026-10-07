@@ -1,6 +1,6 @@
 """Post-render QA for dialogue videos: finds lines whose speech is slow or stretched, and clips where an extra
 person appears in a single-speaker shot. Results go to <output>/qa/report.json (+ a contact sheet of flagged clips);
-`yt.py qa --plan ... --fix` marks flagged lines in the plan so the next `make` re-renders only those.
+`video.py qa --plan ... --fix` marks flagged lines in the plan so the next `make` re-renders only those.
 
 Detection is deliberately simple and fast:
   speech  Whisper word timings per line -> words/second vs that speaker's typical pace in that language, the longest
@@ -119,7 +119,7 @@ def sample_frames(mp4, fractions=(0.15, 0.5, 0.85)):
 
 # ---------------------------------------------------------------- run
 def scan(plan, out_dir, line_tag, clip_files, skip=lambda ln: False):
-    """plan: a dialogue plan. line_tag(i, ln) -> clip tag; clip_files(tag) -> [mp4 parts]; skip(ln) -> True to leave a
+    """plan: a video plan (lines). line_tag(i, ln) -> clip tag; clip_files(tag) -> [mp4 parts]; skip(ln) -> True to leave a
     line out (it still counts for numbering). Returns (rows, flagged, pace medians)."""
     import av
     lines, rows, n_spoken, t = plan["lines"], [], 0, 0.0
@@ -129,22 +129,23 @@ def scan(plan, out_dir, line_tag, clip_files, skip=lambda ln: False):
         for p in clip_files(line_tag(i, ln)):  # each clip is its narration slice + 1 frame; gives the timeline
             c = av.open(str(p)); t += (c.streams.video[0].frames - 1) / comfy.FPS; c.close()
         if skip(ln):
-            n_spoken += 0 if ln.get("shot") else 1
+            n_spoken += 1 if ln.get("text") else 0
             continue
         row = {"line": i, "at": f"{int(start // 60)}:{start % 60:04.1f}", "start": round(start, 2),
-               "shot": ln.get("shot"), "speaker": ln.get("speaker"), "lang": ln.get("lang", "en"),
+               "shot": ln.get("shot"), "speaker": ln.get("speaker") or ln.get("actor") or ln.get("voice"),
+               "lang": ln.get("lang", "en"),
                "text": N.plain(ln.get("text", "")), "check": ln.get("check", True) and "{" not in ln.get("text", ""),
                "clips": [str(p) for p in clip_files(line_tag(i, ln))]}
-        if not ln.get("shot"):
+        if ln.get("text"):  # voiced (spoken, or a voice-over); per-line takes only - a flowing take spans lines
             n_spoken += 1
             take = newest(Path(out_dir) / "narration", f"line{n_spoken:03d}_0*.flac")
             row["take"] = str(take) if take else None
             if take and "{" not in ln.get("text", ""):  # (mixed-language lines are built from parts; skipped here)
                 row.update(speech_metrics(take, row["lang"], row["text"]))
-        expected = 2 if ln.get("shot") else 1
-        row["people"] = max((people_in(sample_frames(p)) for p in row["clips"]), default=0)
+        expected = 2 if ln.get("shot") else (None if (ln.get("footage") or row.get("footage")) else 1)  # b-roll: anyone
+        row["people"] = max((people_in(sample_frames(p)) for p in row["clips"]), default=0) if expected else 0
         row["people_issue"] = (f"{row['people']} people in a {'shot' if expected == 2 else 'single-speaker'} clip"
-                               if row["people"] > expected else None)
+                               if expected and row["people"] > expected else None)
         rows.append(row)
         if i % 20 == 0:
             print(f"  {i}/{len(lines)}", flush=True)

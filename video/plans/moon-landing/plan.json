@@ -1,0 +1,93 @@
+{
+  "title": "Was the Moon Landing Faked",
+  "slug": "moon-landing",
+  "seed": 1969,
+  "upscale_to": [
+    1920,
+    1080
+  ],
+  "genre": "conspiracy",
+  "seconds": 120,
+  "format": "16x9",
+  "narration": "flowing",
+  "cast": {
+    "vale": {}
+  },
+  "lines": [
+    {
+      "speaker": "vale",
+      "text": "In July nineteen sixty nine, around six hundred million people watched Neil Armstrong step onto the Moon. Yet a stubborn minority insist it never happened at all.",
+      "broll": "The blue Earth rising over the grey cratered lunar horizon against a pitch black sky."
+    },
+    {
+      "speaker": "vale",
+      "text": "So today, let's do something slightly unusual for a conspiracy channel. Let's take the hoax claims seriously, one by one, and test them against the evidence.",
+      "broll": "A dim study desk covered with old black and white space mission photographs, a brass magnifying glass and handwritten notes, warm lamp light."
+    },
+    {
+      "speaker": "vale",
+      "text": "The idea really took off in nineteen seventy six, when a former rocket company writer, Bill Kaysing, self-published a book claiming the landings were staged.",
+      "broll": "A 1970s typewriter beside a tall stack of manuscript pages in a cluttered room, warm lamp light, no people."
+    },
+    {
+      "speaker": "vale",
+      "text": "Claim one: the flag appears to wave, and there's no wind on the Moon. True, there's no wind, which is exactly why the flag behaves so strangely.",
+      "broll": "An American flag on a metal pole planted in grey lunar dust, held out by a horizontal rod along its top edge, harsh sunlight, black sky."
+    },
+    {
+      "speaker": "vale",
+      "text": "It hung from a horizontal rod, and it only moved while the astronauts twisted the pole. With no air to slow it, the fabric kept swinging.",
+      "broll": "A close view of creased flag fabric hanging from a horizontal metal rod above grey lunar soil, harsh sunlight, black sky."
+    },
+    {
+      "speaker": "vale",
+      "text": "Claim two: there are no stars in the photographs. But the lunar surface was in bright sunlight, and the cameras were set for daylight exposures.",
+      "broll": "A vintage silver medium format camera resting on grey lunar soil in harsh sunlight, a pitch black sky with no stars."
+    },
+    {
+      "speaker": "vale",
+      "text": "Try photographing a starry sky from a floodlit stadium and you'll get the same result. The faint stars simply vanish against the glare.",
+      "broll": "An empty floodlit sports stadium at night, blazing lights, a black sky with no visible stars."
+    },
+    {
+      "speaker": "vale",
+      "text": "Claim three: the shadows point in different directions, so there must be studio lights. In fact, uneven ground and wide angle lenses bend shadows naturally.",
+      "broll": "Rocks scattered across uneven cratered lunar ground casting long dark shadows at slightly different angles, low sun, black sky."
+    },
+    {
+      "speaker": "vale",
+      "text": "Claim four: the Van Allen radiation belts would have killed the crew. The spacecraft crossed them in a few hours, on a path through their thinner regions.",
+      "broll": "A glowing band of faint blue-green radiation arcing around the Earth seen from deep space, a tiny distant spacecraft silhouette."
+    },
+    {
+      "speaker": "vale",
+      "text": "And here's what the hoax theory can't explain. Apollo brought back three hundred and eighty two kilograms of Moon rock, studied by scientists around the world.",
+      "broll": "A grey lunar rock sample inside a sealed glass laboratory cabinet, clean white lab lighting, no people."
+    },
+    {
+      "speaker": "vale",
+      "text": "Astronauts also left mirrors on the surface. Observatories still bounce lasers off them today, measuring the distance to the Moon to within millimetres.",
+      "broll": "A thin green laser beam shooting from an observatory dome into a night sky towards a bright full Moon."
+    },
+    {
+      "speaker": "vale",
+      "text": "In two thousand nine, NASA's Lunar Reconnaissance Orbiter photographed the landing sites from orbit, showing the descent stages and even the astronauts' footpaths.",
+      "broll": "A high overhead view of a grey lunar plain with a small lander base and faint dark footpath tracks leading away from it."
+    },
+    {
+      "speaker": "vale",
+      "text": "Perhaps most telling of all, the Soviet Union was tracking every mission. Locked in a space race, they had every reason to cry foul, and never did.",
+      "broll": "A 1960s radar tracking station with a huge dish antenna at dusk under a cold sky, no people."
+    },
+    {
+      "speaker": "vale",
+      "text": "So, was it faked? Every claim has an answer, and the evidence is still up there. Sometimes the official story really is the true one.",
+      "broll": "A full Moon rising slowly over a dark city skyline at night."
+    }
+  ],
+  "auto_footage": {
+    "share": 0.4
+  },
+  "style": "cinematic documentary still, Apollo era 1969 aesthetic, 35mm film grain, high contrast, realistic",
+  "ambience": "Low, atmospheric ambient hum, no music."
+}

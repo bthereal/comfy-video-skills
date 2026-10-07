@@ -4,21 +4,23 @@ Two Claude Code skills (and the Python tools behind them) that generate talking-
 
 | Skill | What it makes |
 |---|---|
-| [`comfy-influencer-reel/`](comfy-influencer-reel/README.md) | Vertical 9:16 "influencer" reels (TikTok/Shorts/Reels style) on any topic, with named AI influencers who keep the same face and voice, plus any number of outfits and scenes. |
-| [`youtube-channel/`](youtube-channel/README.md) | 16:9 YouTube videos of any length: a named AI narrator on camera, randomly intercut with generated b-roll footage. Optional 1080p upscale. |
+| [`actors/`](actors/README.md) | Reusable characters: a fixed face, a cloned voice in one or more languages, and any number of looks. Create one by describing them ("an actor named Jane, brown eyes, speaks French"), then use them in any skill. |
+| [`video/`](video/README.md) | Videos with those actors, 16:9 or 9:16, of any length: someone talking to camera (reels, vlogs), conversations, actors doing things, narrated documentaries with b-roll, language lessons with captions. Ask for it in words ("a 16:9 video of Jane dining in a café in Paris"). Includes QA and targeted repair. |
 
-Both skills run the **same narration-first pipeline** on a shared engine and shared workflows:
+**What to ask for:** [PROMPTS.md](PROMPTS.md) explains how to describe actors, scenes and videos in plain language, with example prompts for every option.
 
-1. **Narration:** [Chatterbox](https://huggingface.co/ResembleAI/chatterbox) speaks the whole script in the persona's cloned voice as one continuous recording, so speech never resets at a cut. Whisper checks every take for missing, repeated or extra words and re-records failures.
-2. **Slicing:** Whisper word timings cut the narration into per-segment slices at natural pauses, sized to LTX's frame grid.
-3. **Clips:** each slice gets an LTX-2.3 **image+audio** clip, lip-synced to the persona's portrait (or animating b-roll footage under voice-over).
-4. **Assembly:** the clips are joined over the unbroken narration (streamed, so any length fits in RAM), with an optional upscale.
+Videos are made by a **narration-first pipeline** on a shared engine and shared workflows:
 
-What a video is *about* (topic, script, setting, style, sound) lives entirely in its **plan file**, and who's speaking (face, voice, camera, lighting) lives in the **persona profile**. The code has no subject matter in it.
+1. **Narration:** [Chatterbox](https://huggingface.co/ResembleAI/chatterbox) speaks every line in its actor's cloned voice and language. A run of lines by one voice is one continuous recording, so speech doesn't reset at a cut. Whisper checks every take for missing, repeated, extra or drawn-out words and re-records failures.
+2. **Slicing:** Whisper word timings cut the narration into per-line slices at natural pauses, sized to LTX's frame grid.
+3. **Clips:** each slice gets an LTX-2.3 **image+audio** clip, lip-synced to the actor's look image (or animating b-roll footage under a voice-over).
+4. **Assembly:** the clips are joined over the narration (streamed, so any length fits in RAM), with optional captions and upscale.
+
+What a video is *about* (topic, script, setting, style, sound) lives entirely in its **plan file**, and who's in it (face, voices, looks) lives in the **actor**. The code has no subject matter in it.
 
 ## Languages
 
-English is the default. A persona can speak another language by choosing a voice engine in its `profile.json` → `tts`; nothing else in the pipeline changes (LTX lip-syncs any language).
+English is the default. An actor can speak other languages (`--languages fr,en` when creating them, or a voice engine in `actor.json` → `tts` / `voices`); nothing else in the pipeline changes (LTX lip-syncs any language).
 
 | `tts.engine` | Use for | How it works |
 |---|---|---|
@@ -93,14 +95,14 @@ pip install -r requirements.txt
 
 1. Set `COMFYUI_DIR` as above. `COMFYUI_URL` is optional (default `http://127.0.0.1:8188`).
 2. Start ComfyUI by double-clicking **`start-comfyui.bat`** in the repo root (localhost only; keep the window open).
-3. Write a plan and render it. See [Writing a reel plan](comfy-influencer-reel/README.md#writing-a-plan) and [Writing a YouTube plan](youtube-channel/README.md#writing-a-plan).
+3. Write a plan and render it. See [video/README.md](video/README.md) for the plan format and how to write one.
 
 ### Using them as Claude Code skills
 The skills import `engine/` and `workflows/` from the repo root, so **link** the skill folders into `~/.claude/skills` rather than copying them (directory junctions need no admin rights):
 
 ```bat
-mklink /J "%USERPROFILE%\.claude\skills\comfy-influencer-reel" "C:\path\to\comfy-video-skills\comfy-influencer-reel"
-mklink /J "%USERPROFILE%\.claude\skills\youtube-channel"      "C:\path\to\comfy-video-skills\youtube-channel"
+mklink /J "%USERPROFILE%\.claude\skills\actors"                "C:\path\to\comfy-video-skills\actors"
+mklink /J "%USERPROFILE%\.claude\skills\video"                 "C:\path\to\comfy-video-skills\video"
 ```
 Then ask Claude for, say, "a 15 second Maya reel about hydration at the gym" or "a 10 minute YouTube video on the Roswell incident narrated by Vale". Claude follows each skill's `SKILL.md`: it writes the plan, shows you the script, and renders.
 
@@ -117,19 +119,20 @@ workflows/             shared ComfyUI workflow templates
   chatterbox_vc.json      re-voices speech as a persona (piper_vc engine)
   ltx2_3_ia2v.json        talking clips: image + audio -> lip-synced video
 engine/                shared Python
-  comfy.py                ComfyUI connection: config, job runner, uploads, persona creation helpers
+  comfy.py                ComfyUI connection: config, job runner, uploads, image/voice generation helpers
+  actors.py               the actor store: loading, voices per language, on-demand look images, creating actors
+  qa.py                   post-render checks for dialogue videos (speech glitches, extra people)
   narration.py            voice engines (Chatterbox, Chatterbox Multilingual, Piper + VC), Whisper checks, slicing
   video.py                prompts, clip rendering (resume, chaining, VRAM splits), assembly, upscale
   watchdog.py             unattended/overnight renders for either skill (restarts ComfyUI, resumes)
   after_then.py           start a render when another process exits
-comfy-influencer-reel/
-  SKILL.md  README.md  reel.py
-  influencers/<id>/       profile.json, portrait.png, voice.wav, looks/*.png
-  plans/<slug>/plan.json  one example plan (your own plans go here too)
-youtube-channel/
-  SKILL.md  README.md  yt.py
-  narrators/<id>/         profile.json, portrait.png, voice clip(s)
-  projects/<slug>/plan.json  one example plan
+actors/                shared characters, usable by every skill (the actors skill)
+  SKILL.md  README.md  actors.py
+  <id>/                   actor.json, voice clip(s), look images per format (made on demand)
+video/                 videos of any kind with those actors (the video skill)
+  SKILL.md  README.md  video.py
+  plans/<slug>/plan.json  two example plans (a 9:16 reel, a 16:9 documentary); your own plans go here too
+  shots/<name>.png        establishing shots (video.py shot)
 ```
 
 Generated output goes to `<ComfyUI>/output/reels/<slug>/` and `<ComfyUI>/output/youtube/<slug>/`, not into this repo. Re-running a plan resumes: finished narration takes and clips with identical settings are reused.

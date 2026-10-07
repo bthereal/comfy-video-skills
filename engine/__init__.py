@@ -1,3 +1,3 @@
-"""Shared engine for comfy-influencer-reel and youtube-channel: ComfyUI plumbing (comfy), narration (narration)
-and clip rendering/assembly (video). Both skills use the same narration-first pipeline and the top-level workflows/.
+"""Shared engine: ComfyUI plumbing (comfy), actors, narration, the video pipeline (timeline), clip rendering and
+assembly (video), QA. Used by the actors and video skills, with the top-level workflows/.
 """

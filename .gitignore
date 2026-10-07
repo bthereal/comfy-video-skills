@@ -12,19 +12,21 @@ output/
 # Per-influencer run logs (point at local output files)
 reels.jsonl
 
-# Local-only personas and plans (kept on this machine, not published)
-comfy-influencer-reel/influencers/radka/
-comfy-influencer-reel/plans/radka-*/
+# Actors: only the published examples are tracked; every other actor stays on this machine
+actors/*/
+!actors/maya/
+!actors/james/
+!actors/vale/
+actors/*/samples/
+
+# Video plans and shots: only the published examples are tracked
+video/plans/*/
+!video/plans/maya-progressive-overload/
+!video/plans/moon-landing/
+video/shots/
 
 # Editor / OS
 .vscode/
 .idea/
 Thumbs.db
 .DS_Store
-youtube-channel/narrators/clive/
-youtube-channel/narrators/monica/
-youtube-channel/narrators/lucia/
-youtube-channel/narrators/diego/
-youtube-channel/shots/
-youtube-channel/projects/spanish-cafe-poc/
-youtube-channel/projects/cafe-spanish-ep1/
